@@ -508,7 +508,6 @@ class Swatch:
 
     @property
     def width(self) -> int:
-
         """
         Returns:
             int: The number of needles used in the swatch at its greatest width.
@@ -696,6 +695,16 @@ class Swatch:
             str: A string representation of this swatch based on its name.
         """
         return self.name
+
+    def __eq__(self, other: Swatch) -> bool:
+        """
+        Args:
+            other (Swatch): The other swatch to compare to this swatch.
+
+        Returns:
+            bool: True if this and the other swatch, share the same name. False, otherwise.
+        """
+        return self.name == other.name
 
     def shift_swatch_rightward_on_needle_bed(self, shift_needle_count: int = 0) -> Swatch:
         """
