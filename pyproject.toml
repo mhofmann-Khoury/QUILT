@@ -74,7 +74,11 @@ exclude = [
 # =============================================================================
 # These are packages your project needs to run in production
 [tool.poetry.dependencies]
-python = ">=3.11,<3.14"
+python = ">=3.11,<3.13"
+knit-graphs = ">=0.0.8"
+knitout-interpreter = "^0.0.22"
+virtual-knitting-machine = "^0.0.18"
+knitout-to-dat-python = "^0.0.1"
 
 [tool.poetry.group.dev.dependencies]
 importlib-resources = ">=6.5.2"
@@ -109,8 +113,6 @@ sphinx-autoapi = "^3.0.0"          # Automatically generates API documentation
 # -------------------------------------------------------------------------
 # DEVELOPMENT TOOLS AND UTILITIES
 # -------------------------------------------------------------------------
-ipython = "^8.14.0"                # Enhanced interactive Python shell for debugging
-rich = "^13.5.0"                   # Beautiful terminal output and debugging
 tox = "^4.11.0"                    # Test across multiple Python versions locally
 
 # -------------------------------------------------------------------------
