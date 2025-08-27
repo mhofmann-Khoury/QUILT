@@ -310,7 +310,10 @@ class Swatch_Connection:
             * This method does not test for equality of the swatches merged into the interval.
             * This method does not test for overlap or gaps between the intervals.
         """
-        raise NotImplemented("Implemented in subclasses")
+
+        merged_from = self._merged_from_interval(other_connection)
+        merged_to = self._merged_to_interval(other_connection)
+        return self.__class__(self.from_swatch, self.to_swatch, merged_from.begin, merged_from.end, merged_to.begin, merged_to.end)
 
     def swap_from_swatch(self, new_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
         """
@@ -320,11 +323,8 @@ class Swatch_Connection:
 
         Returns:
             Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
-
-        Raises:
-            NotImplementedError: Implemented in subclass.
         """
-        raise NotImplemented("Implemented in subclasses")
+        return self.__class__(new_swatch, self.to_swatch, self.from_begin + interval_shift, self.from_end + interval_shift, self.to_begin, self.to_end)
 
     def swap_to_swatch(self, new_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
         """
@@ -334,11 +334,8 @@ class Swatch_Connection:
 
         Returns:
             Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
-
-        Raises:
-            NotImplementedError: Implemented in subclass.
         """
-        raise NotImplemented("Implemented in subclasses")
+        return self.__class__(new_swatch, self.to_swatch, self.from_begin, self.from_end, self.to_begin + interval_shift, self.to_end + interval_shift)
 
     def get_shifted_connection(self, from_shift: int = 0, to_shift: int = 0) -> Swatch_Connection:
         """
@@ -348,11 +345,10 @@ class Swatch_Connection:
 
         Returns:
             Swatch_Connection: A new connection involving the same swatches with the connection shifted by the given shift values on either side.
-
-        Raises:
-            NotImplementedError: Implemented in subclass.
         """
-        raise NotImplemented("Implemented in subclasses")
+        return self.__class__(self.from_swatch, self.to_swatch,
+                              self.from_begin + from_shift, self.from_end + from_shift,
+                              self.to_begin + to_shift, self.to_end + to_shift)
 
     def swap_matching_swatch(self, new_swatch: Swatch, matching_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
         """
