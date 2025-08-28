@@ -5,9 +5,15 @@ from knitout_interpreter.knitout_operations.Knitout_Line import Knitout_Line
 from networkx import DiGraph
 
 from quilt_knit.swatch.Swatch import Swatch
-from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
+from quilt_knit.swatch.wale_boundary_instructions import (
+    Wale_Boundary_Instruction,
+    Wale_Side,
+)
 from quilt_knit.swatch.wale_wise_merging.Wale_Seam_Connection import (
     Wale_Seam_Connection,
+)
+from quilt_knit.swatch.wale_wise_merging.Wale_Wise_Connection import (
+    Wale_Wise_Connection,
 )
 
 
@@ -110,22 +116,83 @@ class Wale_Seam_Search_Space:
         """
         self.seam_network.remove_edge(exit_instruction, entrance_instruction)
 
-    def remove_boundary(self, instruction: Knitout_Line) -> None:
+    def clean_connections(self) -> set[Wale_Boundary_Instruction]:
         """
-        Removes any boundary instruction associated with the given instruction from the search space.
+        Remove all boundary instructions from the search space that cannot form a connection.
+
+        Returns:
+            list[Wale_Boundary_Instruction]: All boundary instructions that were removed by this process.
+        """
+        bad_instructions = set(boundary for boundary in self.instructions_to_boundary_instruction.values() if len(self.available_connections(boundary)) == 0)
+        for bad_instruction in bad_instructions:
+            self.remove_boundary(bad_instruction)
+        return bad_instructions
+
+    def remove_boundary(self, instruction: Knitout_Line | Wale_Boundary_Instruction) -> None:
+        """
+        Removes a boundary instruction from the search space if it exists in the search space.
 
         Args:
-            instruction (Knitout_Line): An instruction to remove from the search space.
+            instruction (Knitout_Line | Wale_Boundary_Instruction):
+                An instruction to remove from the search space. If the instruction is a knitout line, any associated boundary instruction is removed.
         """
-        if instruction in self.instructions_to_boundary_instruction:
-            boundary = self.instructions_to_boundary_instruction[instruction]
-            if self.seam_network.has_node(boundary):
-                self.seam_network.remove_node(boundary)
-            if boundary.is_exit:
-                self.exit_instructions.remove(boundary)
-            elif boundary.is_entrance:
-                self.entrance_instructions.remove(boundary)
-            del self.instructions_to_boundary_instruction[instruction]
+        if isinstance(instruction, Knitout_Line):
+            if instruction not in self.instructions_to_boundary_instruction:
+                return  # exit because the instruction was not on the boundary
+            else:
+                boundary: Wale_Boundary_Instruction = self.instructions_to_boundary_instruction[instruction]
+        else:
+            boundary = instruction
+        if self.seam_network.has_node(boundary):
+            self.seam_network.remove_node(boundary)
+        if boundary.is_exit:
+            self.exit_instructions.remove(boundary)
+        elif boundary.is_entrance:
+            self.entrance_instructions.remove(boundary)
+        del self.instructions_to_boundary_instruction[boundary.instruction]
+
+    def remove_excluded_exits(self, connection: Wale_Wise_Connection) -> None:
+        """
+        Remove the exit instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
+        Args:
+            connection (Wale_Seam_Connection): The wale wise connection interval to exclude exits outside its connection interval.
+        """
+        for exit_instruction in self.exit_instructions:
+            if exit_instruction.needle.position < connection.bottom_left_needle_position:
+                self.remove_boundary(exit_instruction)
+            else:
+                break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
+        for exit_instruction in reversed(self.exit_instructions):
+            if exit_instruction.needle.position > connection.bottom_right_needle_position:
+                self.remove_boundary(exit_instruction)
+            else:
+                break
+
+    def remove_excluded_entrances(self, connection: Wale_Wise_Connection) -> None:
+        """
+        Remove the entrance instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
+        Args:
+            connection (Wale_Seam_Connection): The wale wise connection interval to exclude entrances outside its connection interval.
+        """
+        for entrance_instruction in self.entrance_instructions:
+            if entrance_instruction.needle.position < connection.top_left_needle_position:
+                self.remove_boundary(entrance_instruction)
+            else:
+                break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
+        for entrance_instruction in reversed(self.entrance_instructions):
+            if entrance_instruction.needle.position > connection.top_right_needle_position:
+                self.remove_boundary(entrance_instruction)
+            else:
+                break
+
+    def remove_excluded_boundary(self, connection: Wale_Wise_Connection) -> None:
+        """
+        Remove the boundary instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
+        Args:
+            connection (Wale_Seam_Connection): The wale wise connection interval to exclude boundary instructions outside its connection interval.
+        """
+        self.remove_excluded_entrances(connection)
+        self.remove_excluded_exits(connection)
 
     def choose_best_connection(self, boundary_instruction: Wale_Boundary_Instruction, preferred_rack_values: set[int] | None = None) -> Wale_Seam_Connection | None:
         """
