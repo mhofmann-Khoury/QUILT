@@ -170,3 +170,13 @@ class Wale_Seam_Connection:
             return False  # The other connection is better because it has some solution.
         else:
             return len(minimum_instructions_for_self) <= len(minimum_instructions_for_other)
+
+    def __lt__(self, other: Wale_Seam_Connection) -> bool:
+        """
+        Args:
+            other (Wale_Seam_Connection): The other connection to compare to.
+
+        Returns:
+            bool: True if this connection is strictly worse than the other connection. A connection is better if it can form a connection in fewer operations.
+        """
+        return not self.better_connection(other)

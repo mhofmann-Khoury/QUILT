@@ -787,14 +787,14 @@ type = ["pygobject-stubs", "pytest-mypy", "shtab", "types-pywin32"]
 
 [[package]]
 name = "knit-graphs"
-version = "0.0.8"
+version = "0.0.9"
 description = "A graph representation of knitted structures where each loop is a node and edges represent yarn and stitch relationships."
 optional = false
 python-versions = "<3.14,>=3.11"
 groups = ["main"]
 files = [
-    {file = "knit_graphs-0.0.8-py3-none-any.whl", hash = "sha256:d17f922aeb4f8470dcc59388be7b9f217ab1659ac6eb61d527b2a55a9d020d8f"},
-    {file = "knit_graphs-0.0.8.tar.gz", hash = "sha256:f6770de28f81870834ddd988a9499e25157c4d667b3875b09c2e2a8150e9986c"},
+    {file = "knit_graphs-0.0.9-py3-none-any.whl", hash = "sha256:dd7879894907c43e8ddd8690928485c164396c3cdb83d27c4ceec5d1a64e81f6"},
+    {file = "knit_graphs-0.0.9.tar.gz", hash = "sha256:81f958ad11122859f9c0cdef531e5423131390d71e48f0902747f98a3d4b0ec4"},
 ]
 
 [package.dependencies]
@@ -821,19 +821,19 @@ virtual-knitting-machine = ">=0.0.18"
 
 [[package]]
 name = "knitout-to-dat-python"
-version = "0.0.1"
+version = "0.0.2"
 description = "A tool replicating the functionality of the CMU Textile's Lab Knitout-to-Dat Interpreter implemented in Javascript. This python library can convert Knitout files into Shima Seiki DAT files."
 optional = false
 python-versions = "<3.13,>=3.11"
 groups = ["main"]
 files = [
-    {file = "knitout_to_dat_python-0.0.1-py3-none-any.whl", hash = "sha256:b1f24b8818aab654e8a3ff4674948a24a5001d719589cc85638c5a2c36324d03"},
-    {file = "knitout_to_dat_python-0.0.1.tar.gz", hash = "sha256:99ee8f67f974f5b6343eb501e33bfb46af3f2ecc580c9802ac4c45035e885b5e"},
+    {file = "knitout_to_dat_python-0.0.2-py3-none-any.whl", hash = "sha256:a887dbf1266da8ec5c3d8f602b7d4b8d364c1833b6d1ff47deef315e0097dc60"},
+    {file = "knitout_to_dat_python-0.0.2.tar.gz", hash = "sha256:bcb3a00718011223a1e249609b66e73d1ab3d0f347e80860660fe648e8cd3655"},
 ]
 
 [package.dependencies]
-knitout-interpreter = ">=0.0.21"
-virtual-knitting-machine = ">=0.0.17"
+knitout-interpreter = ">=0.0.22"
+virtual-knitting-machine = ">=0.0.19"
 
 [[package]]
 name = "markdown-it-py"
@@ -1511,14 +1511,14 @@ idna2008 = ["idna"]
 
 [[package]]
 name = "rich"
-version = "13.9.4"
+version = "14.1.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 optional = false
 python-versions = ">=3.8.0"
 groups = ["dev"]
 files = [
-    {file = "rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90"},
-    {file = "rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098"},
+    {file = "rich-14.1.0-py3-none-any.whl", hash = "sha256:536f5f1785986d6dbdea3c75205c473f970777b4a0d6c6dd1b696aa05a3fa04f"},
+    {file = "rich-14.1.0.tar.gz", hash = "sha256:e497a48b844b0320d45007cdebfeaeed8db2a4f4bcf49f15e455cfc4af11eaa8"},
 ]
 
 [package.dependencies]
@@ -1979,18 +1979,18 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "virtual-knitting-machine"
-version = "0.0.18"
+version = "0.0.19"
 description = "A data structure representing the state and operations of a virtual V-Bed with sliders whole garment knitting machine based on the whole garment knitting machines made by Shima Seiki."
 optional = false
 python-versions = "<3.14,>=3.11"
 groups = ["main"]
 files = [
-    {file = "virtual_knitting_machine-0.0.18-py3-none-any.whl", hash = "sha256:21c04fb4c2335fb766f0b465e8ffa1a14ae0fa98047d999e70e0411eec62b7f0"},
-    {file = "virtual_knitting_machine-0.0.18.tar.gz", hash = "sha256:4d9450e46b04ebc975b3f8a45170594f4f7cb71e4bbbad4902ce60b392439b01"},
+    {file = "virtual_knitting_machine-0.0.19-py3-none-any.whl", hash = "sha256:cae42905e0c97ee4ee40d70219ef1509a0f46daf29b31522043cfe60a91d95d3"},
+    {file = "virtual_knitting_machine-0.0.19.tar.gz", hash = "sha256:c85167a4733d0c5101bb5e683c72ae62a1392417462ea530179094045fd4363b"},
 ]
 
 [package.dependencies]
-knit-graphs = "0.0.8"
+knit-graphs = ">=0.0.9"
 
 [[package]]
 name = "virtualenv"
@@ -2036,4 +2036,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "599275340c1a7b9c7949b0d77d891d4c26fcfa5b736ad08f1f744c7eec139a13"
+content-hash = "e5fb79f15f93363c92f13f438ca6e850957dce6b18d670bfd40713a898b49ca9"

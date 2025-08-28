@@ -143,19 +143,10 @@ class Swatch:
         self._cp_to_max_blocking_position: dict[Carriage_Pass, int] = {}  # dictionary of carriage passes keyed to the rightmost needle slot blocking the carriage pass? Todo: verify note
         self._process_course_boundaries()
         self._wale_groups: dict[Loop, Wale_Group | Loop] = self.execution_knit_graph.get_wale_groups()
-        self._fix_single_loop_wale_bug()
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
         self.instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
         self.instructions_on_wale_boundary.update({wb.instruction: wb for wb in self.wale_exits})
-
-    def _fix_single_loop_wale_bug(self) -> None:
-        """
-            Temporary fix to ensure that single loop wales (i.e., tucks on the last row) are accounted for in the wale_groups.
-            Todo: Remove this, its fixed in the Knit_graph 0.0.9 patch.
-        """
-        single_terminal_loops = {l: l for l in self.execution_knit_graph.stitch_graph.nodes if self.execution_knit_graph.is_terminal_loop(l) and l not in self._wale_groups}
-        self._wale_groups.update(single_terminal_loops)
 
     def _process_course_boundaries(self) -> None:
         """
