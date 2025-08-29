@@ -651,7 +651,7 @@ class Wale_Merge_Process:
         Creates a knitout file and compiled DAT file of the given merge name of the merged instructions from this merger.
 
         Args:
-            merge_name (str, optional): The name of the merged swatch knitout file. Defaults to cwm_<the bottom_swatch's name>_to_<the top_swatch's name>.
+            merge_name (str, optional): The name of the merged swatch knitout file. Defaults to wm_<the bottom_swatch's name>_to_<the top_swatch's name>.
         """
         if merge_name is None:
             merge_name = f"wm_{self.bottom_swatch.name}_to_{self.top_swatch.name}"

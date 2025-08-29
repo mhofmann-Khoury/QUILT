@@ -116,7 +116,7 @@ class Course_Seam_Search_Space:
             if self.seam_network.has_node(boundary):
                 self.seam_network.remove_node(boundary)
 
-    def get_connection(self, exit_instruction: Course_Boundary_Instruction, entrance_instruction: Course_Boundary_Instruction) -> Course_Seam_Connection | None:
+    def get_connection(self, exit_instruction: Course_Boundary_Instruction, entrance_instruction: Course_Boundary_Instruction) -> Course_Seam_Connection:
         """
 
         Args:
@@ -124,12 +124,14 @@ class Course_Seam_Search_Space:
             entrance_instruction (Course_Boundary_Instruction): The entrance instruction to find the connection of.
 
         Returns:
-            Course_Seam_Connection | None : The connection from the exit to the entrance instruction or None if that connection does not exist in the search space.
+            Course_Seam_Connection : The connection from the exit to the entrance instruction in the search space.
 
+        Raises:
+            ValueError: If there is not a connection between the exit instruction and the entrance instruction in the search space.
         """
         if self.seam_network.has_edge(exit_instruction, entrance_instruction):
             connection = self.seam_network.edges[exit_instruction, entrance_instruction]['connection']
             assert isinstance(connection, Course_Seam_Connection)
             return connection
         else:
-            return None
+            raise ValueError(f"No connection found from {exit_instruction} to {entrance_instruction}")
