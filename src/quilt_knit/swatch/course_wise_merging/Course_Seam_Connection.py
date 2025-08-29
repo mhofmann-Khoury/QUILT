@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from virtual_knitting_machine.machine_components.yarn_management.Yarn_Carrier_Set import (
+    Yarn_Carrier_Set,
+)
+
 from quilt_knit.swatch.course_boundary_instructions import (
     Course_Boundary_Instruction,
     Course_Side,
@@ -53,6 +57,23 @@ class Course_Seam_Connection:
             int: The distances between the carriage passes linked by this connection.
         """
         return abs(self.exit_instruction.carriage_pass_index - self.entrance_instruction.carriage_pass_index)
+
+    @property
+    def different_carriers(self) -> int:
+        """
+        Returns:
+            int: The number of carriers that differ between the entrance and exit instructions. Differences include different positions in the carrier set and different lengths of carrier sets.
+        """
+        exit_carrier_set = self.exit_instruction.carrier_set
+        if exit_carrier_set is None:
+            exit_carrier_set = []
+        entrance_carrier_set = self.entrance_instruction.carrier_set
+        if entrance_carrier_set is None:
+            entrance_carrier_set = []
+        differences = len([True for exit_cid, entrance_cid in zip(exit_carrier_set, entrance_carrier_set) if exit_cid != entrance_cid])
+        if len(exit_carrier_set) != len(entrance_carrier_set):
+            differences += abs(len(exit_carrier_set) - len(entrance_carrier_set))
+        return differences
 
     @property
     def shared_carriers(self) -> set[int]:

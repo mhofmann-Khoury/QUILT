@@ -83,6 +83,7 @@ knitout-to-dat-python = ">=0.0.2"
 
 [tool.poetry.group.dev.dependencies]
 importlib-resources = ">=6.5.2"
+knit-script = ">=0.1.33"
 
 # -------------------------------------------------------------------------
 # TESTING FRAMEWORK AND PLUGINS

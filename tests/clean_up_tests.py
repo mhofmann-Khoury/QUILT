@@ -23,7 +23,7 @@ def cleanup_test_files(extensions: list[str] | None = None, preserve_set: set[st
         preserve_set = set()
 
     # Get the current directory
-    current_path = Path("resources")
+    current_path = Path(".")
 
     deleted_count = 0
 

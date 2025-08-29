@@ -1,4 +1,5 @@
 """Module for linking Swatches by vertical seams"""
+import warnings
 
 from knitout_interpreter.knitout_execution_structures.Carriage_Pass import Carriage_Pass
 from knitout_interpreter.knitout_operations.carrier_instructions import (
@@ -27,6 +28,13 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
 from knitout_interpreter.knitout_operations.Rack_Instruction import Rack_Instruction
 from knitout_to_dat_python.knitout_to_dat import knitout_to_dat
 from virtual_knitting_machine.Knitting_Machine import Knitting_Machine
+from virtual_knitting_machine.knitting_machine_warnings.carrier_operation_warnings import (
+    Mismatched_Releasehook_Warning,
+)
+from virtual_knitting_machine.knitting_machine_warnings.Yarn_Carrier_System_Warning import (
+    In_Active_Carrier_Warning,
+    Out_Inactive_Carrier_Warning,
+)
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
 )
@@ -315,9 +323,9 @@ class Course_Merge_Process:
             Needle_Instruction | None: The next needle instruction that will be encountered in the next (non-current) swatch program or None if no more needle instructions exist in that swatch.
         """
         if self.current_swatch_side is Course_Side.Left:
-            return self.next_right_instruction
+            return self.next_right_needle_instruction
         else:
-            return self.next_left_instruction
+            return self.next_left_needle_instruction
 
     @property
     def cp_index_of_next_needle_instruction_in_next_swatch(self) -> int | None:
@@ -472,8 +480,13 @@ class Course_Merge_Process:
         if source_swatch_side is Course_Side.Left:
             return needle_instruction
         else:
-            shifted_instruction = build_instruction(needle_instruction.instruction_type, needle_instruction.needle + self.left_swatch.width,
-                                                    needle_instruction.direction, needle_instruction.carrier_set, needle_instruction.needle_2 + self.left_swatch.width,
+            shifted_needle = needle_instruction.needle + self.left_swatch.width
+            if needle_instruction.needle_2 is None:
+                shifted_needle_2 = None
+            else:
+                shifted_needle_2 = needle_instruction.needle_2 + self.left_swatch.width
+            shifted_instruction = build_instruction(needle_instruction.instruction_type, shifted_needle,
+                                                    needle_instruction.direction, needle_instruction.carrier_set, shifted_needle_2,
                                                     comment="Right Shifted for Merge")
             assert isinstance(shifted_instruction, Needle_Instruction)
             shifted_instruction.original_line_number = needle_instruction.original_line_number
@@ -492,7 +505,7 @@ class Course_Merge_Process:
         elif isinstance(next_instruction, Inhook_Instruction) or isinstance(next_instruction, Outhook_Instruction):
             return True
         elif isinstance(next_instruction, Needle_Instruction):
-            if next_instruction.has_second_needle or self.merged_program_machine_state.carrier_system.hook_input_direction == next_instruction.direction:
+            if next_instruction.has_second_needle:
                 return True
         return False
 
@@ -544,8 +557,11 @@ class Course_Merge_Process:
                 return 0
             return abs(int(merge_instruction.needle.position) - current_carrier_position)
 
-        return {carrier: (_float_length(carrier.position), _float_direction(carrier.position))
-                for carrier in merge_instruction.carrier_set.get_carriers(self.merged_program_machine_state.carrier_system) if _float_length(carrier.position) > 0}
+        def _float(current_carrier_position: int | None) -> tuple[int, Carriage_Pass_Direction]:
+            return _float_length(current_carrier_position), _float_direction(current_carrier_position)
+
+        floats = {carrier: _float(carrier.position) for carrier in merge_instruction.carrier_set.get_carriers(self.merged_program_machine_state.carrier_system)}
+        return {c: f for c, f in floats.items() if f[0] > 0}
 
     def _add_instruction_to_merge(self, merge_instruction: Knitout_Line, instruction_source: Course_Side, instruction: Knitout_Line | None = None) -> bool:
         """
@@ -558,12 +574,19 @@ class Course_Merge_Process:
         Returns:
             bool: True if the given merged instruction updates the machine state and is added to the merged program. False otherwise.
         """
-        updates_merge = merge_instruction.execute(self.merged_program_machine_state)
-        if not updates_merge:
-            return False  # No update to the merged machine state, so this isn't added to the merged program.
         if instruction is None:
             instruction = merge_instruction
-        instruction.execute(self.source_machine_states[instruction_source])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=In_Active_Carrier_Warning)
+            warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
+            warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
+            instruction.execute(self.source_machine_states[instruction_source])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
+            warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
+            updates_merge = merge_instruction.execute(self.merged_program_machine_state)
+            if not updates_merge:
+                return False  # No update to the merged machine state, so this isn't added to the merged program.
         self.merged_instructions.append((merge_instruction, instruction_source))
         return True
 
@@ -627,6 +650,24 @@ class Course_Merge_Process:
             self._release_to_merge_instruction(insert_float_yarn, instruction_source)
             self._add_instruction_to_merge(insert_float_yarn, instruction_source)
 
+    def _instruction_is_no_op_in_merged_program(self, instruction: Knitout_Line) -> bool:
+        """
+        Args:
+            instruction (Knitout_Line): The instruction to test for a no-op.
+
+        Returns:
+            bool: True if the given instruction has no effect on merged program. False, otherwise.
+        """
+        if isinstance(instruction, Inhook_Instruction):  # Inhook an active carrier
+            return bool(instruction.carrier in self.merged_program_machine_state.carrier_system.active_carriers)
+        elif isinstance(instruction, Releasehook_Instruction):  # release free hook or wrong carrier on that hook
+            return bool(self.merged_program_machine_state.carrier_system.inserting_hook_available or
+                        self.merged_program_machine_state.carrier_system.hooked_carrier.carrier_id != instruction.carrier_id)
+        elif isinstance(instruction, Outhook_Instruction):  # cut inactive carrier
+            return bool(self.merged_program_machine_state.carrier_system[instruction.carrier].is_active)
+        else:
+            return False
+
     def _consume_instruction(self, instruction: Knitout_Line, instruction_source: Course_Side, remove_connections: bool = False, max_float: int = 15) -> None:
         """
         Consumes the given instruction in the specified swatch.
@@ -642,6 +683,9 @@ class Course_Merge_Process:
         if (isinstance(instruction, Knitout_Header_Line) or isinstance(instruction, Knitout_Version_Line)
                 or (isinstance(instruction, Knitout_Comment_Line) and "No-Op:" in str(instruction))):  # Todo: Update knitout interpreter to have subclass of comments for no-ops
             return  # Do not consume header, version lines, or no-op comments
+        if self._instruction_is_no_op_in_merged_program(instruction):  # No op inhook or releasehook in the merged program.
+            instruction.execute(self.source_machine_states[instruction_source])  # update carrier in the swatch's machine, but ignore its addition to the merged program
+            return
         if remove_connections:
             self.seam_search_space.remove_boundary(instruction)
         self._release_to_merge_instruction(instruction, instruction_source)  # Add any necessary releases before the instruction is merged in.
@@ -651,7 +695,7 @@ class Course_Merge_Process:
             # update instruction to align with needle slots based on origin swatch
             merge_instruction = self.needle_instruction_in_merged_swatch(instruction, instruction_source)
             if isinstance(merge_instruction, Loop_Making_Instruction):  # Long floats may be created by this operation
-                for carrier, float_values in self._get_floats_to_instruction(merge_instruction):
+                for carrier, float_values in self._get_floats_to_instruction(merge_instruction).items():
                     float_len = float_values[0]
                     float_direction = float_values[1]
                     if float_len >= max_float:
@@ -737,8 +781,6 @@ class Course_Merge_Process:
         """
         while self.next_instruction is not None and self.next_instruction != target_instruction:
             self._consume_next_instruction(remove_connections)
-        if self.next_instruction == target_instruction:
-            self._consume_from_current_swatch(remove_connections)
 
     def _consume_up_to_first_courses(self) -> None:
         """
@@ -749,27 +791,33 @@ class Course_Merge_Process:
         self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, end_on_carriage_pass_index=self.first_courses_by_side[self.current_swatch_side], remove_connections=True)
         self.swap_swatch_sides()  # return to first swatch for merging process
 
-    def _available_connections(self, boundary_instruction: Course_Boundary_Instruction, max_cp_jumps: int = 4) -> set[Course_Seam_Connection]:
+    def _available_connections(self, boundary_instruction: Course_Boundary_Instruction,
+                               excluded_boundaries: set[Course_Boundary_Instruction] | None = None, max_cp_jumps: int = 4) -> set[Course_Seam_Connection]:
         """
         Args:
             boundary_instruction (Course_Boundary_Instruction): The boundary instruction to find connections from.
+            excluded_boundaries (set[Course_Boundary_Instruction], optional: The set of boundary instructions to exclude from the available connections. Defaults to the empty set.
             max_cp_jumps (int, optional): The maximum number carriage passes allowed to be jumped to form a connection. Defaults to 4.
 
         Returns:
             set[Course_Seam_Connection]:
                 The set of available connections in the seam search space from the given boundary instruction.
-                * Available connections will be refined to those those that do not require carriage pass jumps greater than the specified amount.
+                * Available connections will be refined to those that do not require carriage pass jumps greater than the specified amount.
                 * If there are connections that will not require long floats to be cut, only those connections will be returned. Otherwise, connections that require cut-floats will be returned.
 
         """
         if boundary_instruction not in self.seam_search_space.seam_network:
             return set()
+        if excluded_boundaries is None:
+            excluded_boundaries = set()
         if isinstance(boundary_instruction.instruction, Xfer_Instruction):
             max_cp_jumps = 0  # Never jump ahead just to connect xfers
         next_left_cp = self.cp_index_of_next_left_needle_instruction
-        assert isinstance(next_left_cp, int), f"Expected more carriage passes on left side"
+        if next_left_cp is None:
+            next_left_cp = -1
         next_right_cp = self.cp_index_of_next_right_needle_instruction
-        assert isinstance(next_right_cp, int), f"Expected more carriage passes on right side"
+        if next_right_cp is None:
+            next_right_cp = -1
         max_cp = max(next_left_cp, next_right_cp)
         max_cp += max_cp_jumps
         if boundary_instruction.is_entrance:
@@ -780,6 +828,7 @@ class Course_Merge_Process:
             potential_connections = set(self.seam_search_space.get_connection(boundary_instruction, e)
                                         for e in self.seam_search_space.seam_network.successors(boundary_instruction)
                                         if e.carriage_pass_index <= max_cp)
+        potential_connections = set(c for c in potential_connections if c.exit_instruction not in excluded_boundaries and c.entrance_instruction not in excluded_boundaries)
 
         def _safe_connection(c: Course_Seam_Connection) -> bool:
             """
@@ -800,9 +849,6 @@ class Course_Merge_Process:
             return not self._has_dangerous_float(c)
 
         safe_connections = set(c for c in potential_connections if _safe_connection(c))
-        no_cuts = set(c for c in potential_connections if not c.requires_cut)
-        if len(no_cuts) > 0:
-            return no_cuts
         return safe_connections
 
     def _connection_cost(self, connection: Course_Seam_Connection) -> tuple[int, int, int]:
@@ -813,14 +859,14 @@ class Course_Merge_Process:
         Returns:
             tuple[int, int, int]:
                 A tuple specifying different costs of forming the given connection. The tuple contains:
+                * The differences between the carrier sets of the connection.
                 * The number of long floats that must be cut to form this connection.
                 * The number of carriage passes that must be jumped to form this connection.
-                * A negation (benefit, rather than cost) of the number of carriers shared between the instructions.
 
         """
         jump_distance = self._get_distance_to_connection_jump(connection)
         floats_cut = self.floats_requires_cut(connection)
-        return floats_cut, jump_distance, -len(connection.shared_carriers)
+        return connection.different_carriers, floats_cut, jump_distance
 
     def best_connection(self, boundary_instruction: Course_Boundary_Instruction) -> Course_Seam_Connection | None:
         """
@@ -836,19 +882,34 @@ class Course_Merge_Process:
             return preference
         return None
 
-    def preferred_connection(self, boundary_instruction: Course_Boundary_Instruction) -> Course_Seam_Connection | None:
+    def preferred_connection(self, boundary_instruction: Course_Boundary_Instruction, excluded_boundaries: set[Course_Boundary_Instruction] | None = None) -> Course_Seam_Connection | None:
         """
         Args:
             boundary_instruction (boundary_instruction): The boundary instruction to find the best connection from.
+            excluded_boundaries (set[Course_Boundary_Instruction], optional): The set of boundary instructions to exclude from potential connections. Defaults to the empty set.
 
         Returns:
             Course_Seam_Connection | None: The lowest cost connection from the given boundary instruction or None if there are no connections available.
 
         """
-        potential_connections = self._available_connections(boundary_instruction)
+        potential_connections = self._available_connections(boundary_instruction, excluded_boundaries=excluded_boundaries)
         if len(potential_connections) == 0:
             return None
         return min(potential_connections, key=self._connection_cost)  # Note: Min of tuple will compare elements step wise (first element < first element then second element < second element)
+
+    def _get_boundaries_upto_connection(self, connection: Course_Seam_Connection) -> list[Course_Boundary_Instruction]:
+        """
+        Args:
+            connection (Course_Seam_Connection): The connection that may skip over existing boundaries.
+
+        Returns:
+            list[Course_Boundary_Instruction]: Boundary instruction in the non-current (next) swatch that will be skipped by the given connection.
+        """
+        next_swatch_current_cp, target_cp = self._get_carriage_pass_range_upto_connection(connection)
+        if self.current_swatch_side is Course_Side.Right:  # look at left swatch
+            return [self.seam_search_space.left_swatch_boundaries_by_course_index[i] for i in range(next_swatch_current_cp, target_cp)]
+        else:  # look at right swatch
+            return [self.seam_search_space.right_swatch_boundaries_by_course_index[i] for i in range(next_swatch_current_cp, target_cp)]
 
     def _connection_is_stable(self, connection: Course_Seam_Connection) -> bool:
         """
@@ -863,7 +924,7 @@ class Course_Merge_Process:
         """
         c_cost = self._connection_cost(connection)
         for alternate_boundary in self._get_boundaries_upto_connection(connection):
-            alternate_connection = self.preferred_connection(alternate_boundary)
+            alternate_connection = self.preferred_connection(alternate_boundary, excluded_boundaries={connection.exit_instruction, connection.entrance_instruction})
             if alternate_connection is not None:
                 a_cost = self._connection_cost(alternate_connection)
                 if a_cost < c_cost:
@@ -953,20 +1014,6 @@ class Course_Merge_Process:
         assert isinstance(next_swatch_current_cp, int), f"Expected connection {connection} to jump into at least one operation in the next swatch"
         target_cp = self._get_cp_index_of_connection_jump(connection)
         return next_swatch_current_cp, target_cp
-
-    def _get_boundaries_upto_connection(self, connection: Course_Seam_Connection) -> list[Course_Boundary_Instruction]:
-        """
-        Args:
-            connection (Course_Seam_Connection): The connection that may skip over existing boundaries.
-
-        Returns:
-            list[Course_Boundary_Instruction]: Boundary instruction in the non-current (next) swatch that will be skipped by the given connection.
-        """
-        next_swatch_current_cp, target_cp = self._get_carriage_pass_range_upto_connection(connection)
-        if self.current_swatch_side is Course_Side.Right:  # look at left swatch
-            return [self.seam_search_space.left_swatch_boundaries_by_course_index[i] for i in range(next_swatch_current_cp, target_cp)]
-        else:  # look at right swatch
-            return [self.seam_search_space.right_swatch_boundaries_by_course_index[i] for i in range(next_swatch_current_cp, target_cp)]
 
     def _get_carriage_passes_upto_connection(self, connection: Course_Seam_Connection) -> list[Carriage_Pass]:
         """
@@ -1065,7 +1112,7 @@ class Course_Merge_Process:
                     best_connection = None
                 else:
                     best_connection = self.best_connection(exit_instruction)
-                self._consume_next_instruction(remove_connections=True)  # Consumes teh exit instruction
+                self._consume_next_instruction(remove_connections=True)  # Consumes the exit instruction
                 if best_connection is not None:  # Otherwise continue in the current swatch, ignoring that possible connection
                     self.swap_swatch_sides()
                     self._consume_to_instruction(best_connection.entrance_instruction.instruction)
