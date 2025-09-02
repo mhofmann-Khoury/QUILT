@@ -216,7 +216,7 @@ warn_unused_ignores = false         # Don't warn about unused type ignores in te
 
 # Coverage measurement settings
 [tool.coverage.run]
-source = ["src/knit_graphs"]
+source = ["src/quilt_knit"]
 omit = [                           # Files to exclude from coverage measurement
     "*/tests/*",                    # Don't measure coverage of test files
     "*/test_*",                     # Don't measure coverage of test files
