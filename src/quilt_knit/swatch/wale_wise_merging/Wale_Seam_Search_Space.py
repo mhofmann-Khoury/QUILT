@@ -5,10 +5,7 @@ from knitout_interpreter.knitout_operations.Knitout_Line import Knitout_Line
 from networkx import DiGraph
 
 from quilt_knit.swatch.Swatch import Swatch
-from quilt_knit.swatch.wale_boundary_instructions import (
-    Wale_Boundary_Instruction,
-    Wale_Side,
-)
+from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
 from quilt_knit.swatch.wale_wise_merging.Wale_Seam_Connection import (
     Wale_Seam_Connection,
 )
@@ -26,13 +23,13 @@ class Wale_Seam_Search_Space:
         self.bottom_swatch: Swatch = bottom_swatch
         self.seam_network: DiGraph = DiGraph()
         self.instructions_to_boundary_instruction: dict[Knitout_Line, Wale_Boundary_Instruction] = {}
-        sorted_bottom_exits: list[Wale_Boundary_Instruction] = sorted(self.bottom_swatch.wale_exits)
-        self.exit_instructions: list[Wale_Boundary_Instruction] = [*sorted_bottom_exits]
+        sorted_bottom_exits: list[Wale_Boundary_Instruction] = sorted(self.bottom_swatch.wale_exits, key=lambda wb: wb.needle.position)
+        self.exit_instructions: set[Wale_Boundary_Instruction] = set(sorted_bottom_exits)
         for exit_instruction in sorted_bottom_exits:
             self.instructions_to_boundary_instruction[exit_instruction.instruction] = exit_instruction
             self.seam_network.add_node(exit_instruction)
-        sorted_top_entrances: list[Wale_Boundary_Instruction] = sorted(self.top_swatch.wale_entrances)
-        self.entrance_instructions: list[Wale_Boundary_Instruction] = [*sorted_top_entrances]
+        sorted_top_entrances: list[Wale_Boundary_Instruction] = sorted(self.top_swatch.wale_entrances, key=lambda wb: wb.needle.position)
+        self.entrance_instructions: set[Wale_Boundary_Instruction] = set(sorted_top_entrances)
         for entrance_instruction in sorted_top_entrances:
             self.instructions_to_boundary_instruction[entrance_instruction.instruction] = entrance_instruction
             self.seam_network.add_node(entrance_instruction)
@@ -145,9 +142,9 @@ class Wale_Seam_Search_Space:
             boundary = instruction
         if self.seam_network.has_node(boundary):
             self.seam_network.remove_node(boundary)
-        if boundary.is_exit:
+        if boundary in self.exit_instructions:
             self.exit_instructions.remove(boundary)
-        elif boundary.is_entrance:
+        elif boundary in self.entrance_instructions:
             self.entrance_instructions.remove(boundary)
         del self.instructions_to_boundary_instruction[boundary.instruction]
 
@@ -157,12 +154,13 @@ class Wale_Seam_Search_Space:
         Args:
             connection (Wale_Seam_Connection): The wale wise connection interval to exclude exits outside its connection interval.
         """
-        for exit_instruction in self.exit_instructions:
+        sorted_exits = sorted(self.exit_instructions)
+        for exit_instruction in sorted_exits:
             if exit_instruction.needle.position < connection.bottom_left_needle_position:
                 self.remove_boundary(exit_instruction)
             else:
                 break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
-        for exit_instruction in reversed(self.exit_instructions):
+        for exit_instruction in reversed(sorted_exits):
             if exit_instruction.needle.position > connection.bottom_right_needle_position:
                 self.remove_boundary(exit_instruction)
             else:
@@ -174,12 +172,13 @@ class Wale_Seam_Search_Space:
         Args:
             connection (Wale_Seam_Connection): The wale wise connection interval to exclude entrances outside its connection interval.
         """
-        for entrance_instruction in self.entrance_instructions:
+        sorted_entrances = sorted(self.entrance_instructions)
+        for entrance_instruction in sorted_entrances:
             if entrance_instruction.needle.position < connection.top_left_needle_position:
                 self.remove_boundary(entrance_instruction)
             else:
                 break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
-        for entrance_instruction in reversed(self.entrance_instructions):
+        for entrance_instruction in reversed(sorted_entrances):
             if entrance_instruction.needle.position > connection.top_right_needle_position:
                 self.remove_boundary(entrance_instruction)
             else:

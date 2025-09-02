@@ -7,7 +7,6 @@ from typing import cast
 from knitout_interpreter.knitout_execution import Knitout_Executer
 from knitout_interpreter.knitout_execution_structures.Carriage_Pass import Carriage_Pass
 from knitout_interpreter.knitout_operations.carrier_instructions import (
-    Hook_Instruction,
     Inhook_Instruction,
     Outhook_Instruction,
     Releasehook_Instruction,
@@ -19,6 +18,7 @@ from knitout_interpreter.knitout_operations.Header_Line import (
 from knitout_interpreter.knitout_operations.Knitout_Line import (
     Knitout_Comment_Line,
     Knitout_Line,
+    Knitout_Version_Line,
 )
 from knitout_interpreter.knitout_operations.needle_instructions import (
     Knit_Instruction,
@@ -31,9 +31,6 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
 from knitout_interpreter.knitout_operations.Rack_Instruction import Rack_Instruction
 from knitout_to_dat_python.knitout_to_dat import knitout_to_dat
 from virtual_knitting_machine.Knitting_Machine import Knitting_Machine
-from virtual_knitting_machine.knitting_machine_exceptions.Yarn_Carrier_Error_State import (
-    Inserting_Hook_In_Use_Exception,
-)
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
 )
@@ -88,7 +85,7 @@ class Wale_Merge_Process:
                  seam_search_space: Wale_Seam_Search_Space | None = None,
                  max_rack: int = 3):
         self.wale_wise_connection: Wale_Wise_Connection = wale_wise_connection
-        self.merged_instructions: list[Knitout_Line] = []
+        self.merged_instructions: list[Knitout_Line] = get_machine_header(self.bottom_swatch.execution_knitting_machine)
         if seam_search_space is None:
             seam_search_space = Wale_Seam_Search_Space(self.bottom_swatch, self.top_swatch, max_rack=max_rack)
         self.seam_search_space: Wale_Seam_Search_Space = seam_search_space
@@ -136,13 +133,16 @@ class Wale_Merge_Process:
         Update the merged tracking machine to the execution point at the end of the swatch.
         Removes all outhook operations from the program that would outhook a needed carrier in the top swatch.
         """
+        found_outhooks = set()
         top_needed_carriers: set[int] = set()
-        for wale_entrance in self.top_swatch.wale_entrances:
-            if wale_entrance.instruction.has_carrier_set:
-                top_needed_carriers.update(wale_entrance.instruction.carrier_set.carrier_ids)
+        for instruction in self.top_swatch.knitout_program:
+            if isinstance(instruction, Outhook_Instruction):
+                found_outhooks.add(instruction.carrier_id)
+            elif isinstance(instruction, Inhook_Instruction) and instruction.carrier_id not in found_outhooks:
+                top_needed_carriers.add(instruction.carrier_id)
         last_outhook_instruction: dict[int, int] = {}
         for instruction in self.bottom_swatch.knitout_program:
-            if isinstance(instruction, Merge_Comment):
+            if isinstance(instruction, Merge_Comment) or isinstance(instruction, Knitout_Header_Line) or isinstance(instruction, Knitout_Version_Line):
                 continue  # Skip over comments form prior merges
             if isinstance(instruction, Outhook_Instruction) and instruction.carrier_id in top_needed_carriers:  # record location of an outhook that wale_entrance may remove.
                 last_outhook_instruction[instruction.carrier_id] = len(self.merged_instructions)
@@ -159,65 +159,77 @@ class Wale_Merge_Process:
             for instruction in self.merged_instructions:
                 instruction.execute(self._merge_tracking_machine_state)
 
-    def _reset_knitting_direction_for_top_swatch(self, knit_to_align: bool = True, max_float: int = 4) -> None:
+    def _reset_knitting_direction_for_top_swatch(self, knit_to_align: bool = True, max_float: int = 4, max_reverse: int = 2) -> None:
         """
         Adds loop-forming instructions on existing loops in order to align the carriers to continue knitting in the direction expected by the top swatch.
 
         Args:
             knit_to_align (bool, optional): If True, alignment instructions will be knits. Otherwise, alignment instructions will be tucks.
             max_float (int, optional): The maximum allowed distance for a carrier to float from its current position in the bottom swatch to its first position in the top swatch. Defaults to 4.
+            max_reverse (int, optional): The maximum allow distances for a float to reverse course after the merge. Defaults to 2.
         """
-        needles_holding_loops = self._merge_tracking_machine_state.all_loops()
-        active_carriers: set[Yarn_Carrier] = set(c for c in self._merge_tracking_machine_state.carrier_system.active_carriers)
-        carriers_to_cur_direction: dict[Yarn_Carrier, Carriage_Pass_Direction] = {}  # Todo: Update Yarn_insertion_System to track the direction of active carriers
-        for instruction in reversed(self.merged_instructions):
-            if isinstance(instruction, Hook_Instruction):
-                instruction_carrier = instruction.get_carrier(self._merge_tracking_machine_state)
-                if instruction_carrier in active_carriers:  # haven't discovered its direction yet.
-                    carriers_to_cur_direction[instruction_carrier] = Carriage_Pass_Direction.Leftward  # Hook operation at end means that the next direction will be leftward.
-                    # carriers_to_position[instruction_carrier] = None
-                    # Outhooks will force a new inhook
-                    active_carriers.remove(instruction_carrier)
-            elif isinstance(instruction, Loop_Making_Instruction):
-                for carrier in instruction.carrier_set.get_carriers(self._merge_tracking_machine_state.carrier_system):
-                    if carrier in active_carriers and carrier not in carriers_to_cur_direction:
-                        carriers_to_cur_direction[carrier] = instruction.direction
-                        # carriers_to_position[carrier] = instruction.needle.position
-                        active_carriers.remove(carrier)
-            if len(active_carriers) == 0:
-                break  # leave for-loop, all directions have been found.
-        carriers_to_align: set[Yarn_Carrier] = set(carriers_to_cur_direction.keys())
+        carriers_to_align: set[Yarn_Carrier] = set(c for c in self._merge_tracking_machine_state.carrier_system.active_carriers)
+        carriers_to_cut: set[Yarn_Carrier] = set()
+        carriers_to_reverse: dict[Yarn_Carrier, set[Needle]] = {}
+        reverse_carrier_is_all_needle: set[Yarn_Carrier] = set()
+        reverse_found: set[Yarn_Carrier] = set()
         for instruction in self.top_swatch.knitout_program:
             if isinstance(instruction, Loop_Making_Instruction):
                 for carrier in instruction.carrier_set.get_carriers(self._merge_tracking_machine_state.carrier_system):
                     if carrier in carriers_to_align:
-                        if carrier.position is not None and abs(instruction.needle.position - carrier.position) > max_float:  # Float will be required to move the carrier in place
-                            if carrier.position < instruction.needle.position:  # current position is to the left of the last instruction
-                                next_direction = Carriage_Pass_Direction.Rightward
-                                left_pos = carrier.position
-                                right_pos = instruction.needle.position
-                                if next_direction == carriers_to_cur_direction[carrier]:  # can continue in this direction
-                                    left_pos += 1
-                            else:  # current position is to the right of the prior position
-                                next_direction = Carriage_Pass_Direction.Leftward
-                                left_pos = instruction.needle.position
-                                right_pos = carrier.position
-                                if next_direction == carriers_to_cur_direction[carrier]:
-                                    right_pos -= 1
-                            aligned_positions = set()
-                            for looped_needle in next_direction.sort_needles(needles_holding_loops):
-                                if looped_needle.position not in aligned_positions and left_pos <= looped_needle.position <= right_pos:
-                                    if knit_to_align:
-                                        align_instruction = Knit_Instruction(looped_needle, next_direction, Yarn_Carrier_Set(carrier), "Align carriers for wale-wise merge.")
-                                    else:
-                                        align_instruction = Tuck_Instruction(looped_needle, next_direction, Yarn_Carrier_Set(carrier), "Align carrier for wale-wise merge.")
-                                    self.merged_instructions.append(align_instruction)
-                                    aligned_positions.add(looped_needle.position)
-                                    align_instruction.execute(self._merge_tracking_machine_state)
+                        assert carrier.position is not None
+                        float_length = abs(instruction.needle.position - carrier.position)
+                        if float_length > max_float:  # Long Float will be required to move the carrier in place
+                            carriers_to_cut.add(carrier)
+                        elif float_length > max_reverse and carrier.direction_to_needle(instruction.needle) != carrier.last_direction:
+                            carriers_to_reverse[carrier] = {instruction.needle}
                         carriers_to_align.remove(carrier)
-            if len(carriers_to_align) == 0:
-                break  # all carrier alignment is fixed.
+                    elif carrier in carriers_to_reverse and carrier not in reverse_found:
+                        if carrier.last_direction == instruction.direction:
+                            if instruction.needle.opposite() in carriers_to_reverse[carrier]:
+                                reverse_carrier_is_all_needle.add(carrier)
+                            carriers_to_reverse[carrier].add(instruction.needle)
+                        else:
+                            reverse_found.add(carrier)
+            if len(carriers_to_align) == 0 and len(reverse_found) == len(carriers_to_reverse):
+                break  # all carrier alignment is found
         assert len(carriers_to_align) == 0, f"Carriers to align are not complete: {carriers_to_align}"
+        for carrier_to_cut in carriers_to_cut:
+            outhook = Outhook_Instruction(carrier_to_cut, "Cut to prevent long float after merge")
+            outhook.execute(self._merge_tracking_machine_state)
+            self.merged_instructions.append(outhook)
+        rack_0 = Rack_Instruction(0, "Re-Zero Rack for Top Swatch")
+        rack_updated = rack_0.execute(self._merge_tracking_machine_state)
+        if rack_updated:
+            self.merged_instructions.append(rack_0)
+        for carrier, reverse_needles in carriers_to_reverse.items():
+            assert carrier in self._merge_tracking_machine_state.carrier_system.active_carriers
+            # Set all Needle racking for the carrier reverse course
+            if carrier in reverse_carrier_is_all_needle:
+                all_needle_rack = Rack_Instruction.rack_instruction_from_int_specification(0, all_needle_rack=True)
+                all_needle_updated = all_needle_rack.execute(self._merge_tracking_machine_state)
+                if all_needle_updated:
+                    self.merged_instructions.append(all_needle_rack)
+            else:
+                all_needle_rack = Rack_Instruction.rack_instruction_from_int_specification(0, all_needle_rack=False)
+                all_needle_updated = all_needle_rack.execute(self._merge_tracking_machine_state)
+                if all_needle_updated:
+                    self.merged_instructions.append(all_needle_rack)
+            reverse_dir = carrier.last_direction.opposite()
+            reverse_needles = reverse_dir.sort_needles(reverse_needles)
+            if knit_to_align:
+                instructions = [Knit_Instruction(n, reverse_dir, Yarn_Carrier_Set(carrier), comment="Align Carrier for Merge") for n in reverse_needles]
+            else:
+                instructions = [Tuck_Instruction(n, reverse_dir, Yarn_Carrier_Set(carrier), comment="Align Carrier for Merge") for n in reverse_needles]
+            cp = Carriage_Pass(instructions[0], rack=0, all_needle_rack=carrier in reverse_carrier_is_all_needle)
+            for instruction in instructions[1:]:
+                cp.add_instruction(instruction, rack=0, all_needle_rack=carrier in reverse_carrier_is_all_needle)
+            executed_cp = cp.execute(self._merge_tracking_machine_state)
+            self.merged_instructions.extend(executed_cp)
+        rack_0 = Rack_Instruction(0, "Re-Zero Rack for Top Swatch")
+        rack_updated = rack_0.execute(self._merge_tracking_machine_state)
+        if rack_updated:
+            self.merged_instructions.append(rack_0)
 
     def _consume_top_swatch(self) -> None:
         """
@@ -232,8 +244,9 @@ class Wale_Merge_Process:
         carriers_to_release: dict[Carriage_Pass_Direction, list[Releasehook_Instruction]] = defaultdict(list)
         found_entrance = False
         for instruction in self.top_swatch.knitout_program:
-            if isinstance(instruction, Merge_Comment):
-                continue  # skip over prior merge comments
+            if (isinstance(instruction, Merge_Comment) or isinstance(instruction, Knitout_Header_Line) or isinstance(instruction, Knitout_Version_Line)
+                    or (isinstance(instruction, Releasehook_Instruction) and self._merge_tracking_machine_state.carrier_system.inserting_hook_available)):
+                continue  # skip over prior merge comments, headers, and version lines
             if not found_entrance:
                 if self.top_swatch.instruction_is_wale_entrance(instruction):
                     found_entrance = True
@@ -299,9 +312,9 @@ class Wale_Merge_Process:
 
         # Find and align all exits that can go directly into an entrance or require only a direct xfer. Remove exits with no possible connections from search space to increase efficiency
         aligned_xfers: list[Xfer_Instruction] = []
-        sorted_exits = [*self.seam_search_space.exit_instructions]  # hold current state because exit_instruction will update from within the loop
+        sorted_exits = sorted(self.seam_search_space.exit_instructions)  # hold current state because exit_instruction will update from within the loop
         for exit_instruction in sorted_exits:
-            connections = sorted(self.seam_search_space.available_connections(exit_instruction))
+            connections = Wale_Seam_Connection.sort_connections(self.seam_search_space.available_connections(exit_instruction))
             assert len(connections) > 0
             for connection in connections:
                 minimum_instructions = connection.minimum_instructions_to_connect_to_entrance()
@@ -321,7 +334,7 @@ class Wale_Merge_Process:
         alignment_transfers_by_racking[0] = aligned_xfers
         # Greedily attach remainder to other rackings
         slider_transfers: list[Xfer_Instruction] = []
-        unassigned_entrances = [e for e in self.seam_search_space.entrance_instructions if e.connections_made == 0]  # hold current state because it will be modified within the loop
+        unassigned_entrances = sorted(e for e in self.seam_search_space.entrance_instructions if e.connections_made == 0)  # hold current state because it will be modified within the loop
         for entrance_instruction in unassigned_entrances:
             available_connections = self.seam_search_space.available_connections(entrance_instruction)
 
@@ -341,7 +354,7 @@ class Wale_Merge_Process:
             assert isinstance(transfer, Xfer_Instruction)
             alignment_transfers_by_racking[racking].append(transfer)
 
-        sorted_exits = [*self.seam_search_space.exit_instructions]  # hold current state because exit_instruction will update from within the loop
+        sorted_exits = sorted(self.seam_search_space.exit_instructions)  # hold current state because exit_instruction will update from within the loop
         for exit_instruction in sorted_exits:
             available_connections = self.seam_search_space.available_connections(exit_instruction)
             if len(available_connections) == 0:  # Prior connections formed in this loop may have made this exit impossible to connect
@@ -360,7 +373,7 @@ class Wale_Merge_Process:
             assert isinstance(transfer, Xfer_Instruction)
             alignment_transfers_by_racking[racking].append(transfer)
 
-        entrances_need_cast_on.update({e.needle: e for e in self.seam_search_space.entrance_instructions})
+        entrances_need_cast_on.update({e.needle: e for e in self.seam_search_space.entrance_instructions if e.connections_made == 0})
         exits_need_bo.update({e.needle: e for e in self.seam_search_space.exit_instructions})
         return alignment_transfers_by_racking, slider_transfers, entrances_need_cast_on, exits_need_bo
 
@@ -584,7 +597,6 @@ class Wale_Merge_Process:
         """
         self._consume_bottom_swatch()
         self.merged_instructions.append(Pre_Merge_Comment())
-        self.top_swatch.shift_swatch_rightward_on_needle_bed()
         alignment_transfers_by_racking, slider_transfers, entrance_needles_need_cast_on, exit_needles_need_bo = self._stratified_connections(maximum_stacked_connections=2)
         self._repair_unaligned_boundaries(entrance_needles_need_cast_on, exit_needles_need_bo)
         self._align_by_transfers(alignment_transfers_by_racking, slider_transfers)
@@ -599,10 +611,12 @@ class Wale_Merge_Process:
         Returns:
             list[Knitout_Line]: List of instructions in the merged program.
         """
-        updated_merged_instructions = []
+        updated_merged_instructions = get_machine_header(self._merge_tracking_machine_state)
         in_bottom_swatch = True
         in_merge = False
         for instruction in self.merged_instructions:
+            if isinstance(instruction, Knitout_Version_Line) or isinstance(instruction, Knitout_Header_Line):
+                continue  # Skip the header
             copy_instruction = copy.copy(instruction)
             if isinstance(instruction, Pre_Merge_Comment):
                 assert in_bottom_swatch
@@ -621,17 +635,10 @@ class Wale_Merge_Process:
                 else:  # assume to be in top swatch
                     copy_instruction.comment += f" from top swatch <{self.top_swatch.name}> line {instruction.original_line_number}"
             updated_merged_instructions.append(copy_instruction)
+            copy_instruction.original_line_number = len(updated_merged_instructions)
 
-        merged_re_organized_instructions: list[Knitout_Line] = []
-        for instruction in updated_merged_instructions:
-            copy_instruction = copy.copy(instruction)
-            copy_instruction.original_line_number = len(merged_re_organized_instructions)
-            merged_re_organized_instructions.append(copy_instruction)
-
-        merge_execution = Knitout_Executer(merged_re_organized_instructions, Knitting_Machine(), accepted_error_types=[Inserting_Hook_In_Use_Exception])
-        merged_executed_instruction = get_machine_header(merge_execution.knitting_machine)
-        merged_executed_instruction.extend(merge_execution.executed_instructions)
-        return cast(list[Knitout_Line], merged_executed_instruction)
+        merge_execution = Knitout_Executer(updated_merged_instructions, Knitting_Machine())
+        return cast(list[Knitout_Line], merge_execution.executed_instructions)
 
     def write_knitout(self, merge_name: str | None = None) -> None:
         """

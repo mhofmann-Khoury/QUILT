@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import cast
 
 from knit_graphs.artin_wale_braids.Wale_Group import Wale_Group
@@ -27,6 +28,7 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
     Loop_Making_Instruction,
     Miss_Instruction,
     Needle_Instruction,
+    Tuck_Instruction,
     Xfer_Instruction,
 )
 from knitout_interpreter.knitout_operations.Rack_Instruction import Rack_Instruction
@@ -34,6 +36,9 @@ from knitout_to_dat_python.knitout_to_dat import knitout_to_dat
 from virtual_knitting_machine.Knitting_Machine import Knitting_Machine
 from virtual_knitting_machine.knitting_machine_exceptions.Yarn_Carrier_Error_State import (
     Use_Inactive_Carrier_Exception,
+)
+from virtual_knitting_machine.knitting_machine_warnings.Needle_Warnings import (
+    Knit_on_Empty_Needle_Warning,
 )
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
@@ -96,19 +101,6 @@ def inject_carriers(knitout_program: list[Knitout_Line], prior_machine_state: Kn
             raise e
 
 
-def _clean_version_line(knitout_program: list[Knitout_Line], version: int = 2) -> list[Knitout_Line]:
-    """
-    TODO: Fix but in Knitout context that checks for a version line against a number. Making this code unneeded.
-    :param knitout_program: The program to clean of redundant version lines.
-    :param version: The version for the program to be set to.
-    :return: A list of knitout lines in the order of the given program without any version lines.
-     The program will start with a version line of the given specification.
-    """
-    clean_program = list(filter(lambda i: not isinstance(i, Knitout_Version_Line), knitout_program))
-    clean_program.insert(0, Knitout_Version_Line(version))
-    return clean_program
-
-
 class Swatch:
     """
         Class that associates a knitout program with the resulting knit graph.
@@ -123,7 +115,7 @@ class Swatch:
             knitout_program, _knitting_machine, _knit_graph = knitout_context.process_knitout_file(knitout_program)
             self.knitout_program: list[Knitout_Line] = cast(list[Knitout_Line], knitout_program)
         else:
-            self.knitout_program: list[Knitout_Line] = _clean_version_line(knitout_program)  # Todo. check if this actually makes any changes and is still needed.
+            self.knitout_program: list[Knitout_Line] = knitout_program
         self.original_machine_state: Knitting_Machine = Knitting_Machine()
         if prior_machine_state is not None:
             self.original_machine_state = self.original_machine_state.copy(prior_machine_state)
@@ -139,14 +131,23 @@ class Swatch:
             self._carriage_pass_to_index[cp] = i
             for instruction in cp:
                 self._instruction_to_carriage_pass[instruction] = cp
-        self._cp_to_min_blocking_position: dict[Carriage_Pass, int] = {}  # dictionary of carriage passes keyed to the leftmost needle slot blocking the carriage pass? Todo: verify note
-        self._cp_to_max_blocking_position: dict[Carriage_Pass, int] = {}  # dictionary of carriage passes keyed to the rightmost needle slot blocking the carriage pass? Todo: verify note
         self._process_course_boundaries()
         self._wale_groups: dict[Loop, Wale_Group | Loop] = self.execution_knit_graph.get_wale_groups()
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
         self.instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
-        self.instructions_on_wale_boundary.update({wb.instruction: wb for wb in self.wale_exits})
+        exits_from_entrances = {}
+        updated_exits: list[Wale_Boundary_Instruction] = []
+        for exit_instruction in self.wale_exits:
+            if exit_instruction.instruction in self.instructions_on_wale_boundary:  # instruction was also an entrance
+                entrance = self.get_wale_boundary_instruction(exit_instruction.instruction)
+                entrance.is_exit = True
+                exits_from_entrances[exit_instruction] = entrance
+                updated_exits.append(entrance)
+            else:
+                updated_exits.append(exit_instruction)
+        self.wale_exits: list[Wale_Boundary_Instruction] = updated_exits
+        self.instructions_on_wale_boundary.update({wb.instruction: wb for wb in self.wale_exits if wb not in exits_from_entrances})
 
     def _process_course_boundaries(self) -> None:
         """
@@ -170,10 +171,10 @@ class Swatch:
                 right_is_exit = not blocked_pass
                 left_instruction = carriage_pass.last_instruction
                 right_instruction = carriage_pass.first_instruction
-            left_boundary = Course_Boundary_Instruction(is_entrance=left_is_entrance, instruction=left_instruction, source_swatch_name=self.name,
-                                                        is_exit=left_is_exit, course_side=Course_Side.Left, carriage_pass_index=cp_index, blocked_on_left=False, blocked_on_right=blocked_pass)
-            right_boundary = Course_Boundary_Instruction(is_entrance=right_is_entrance, instruction=right_instruction, source_swatch_name=self.name,
-                                                         is_exit=right_is_exit, course_side=Course_Side.Right, carriage_pass_index=cp_index, blocked_on_left=blocked_pass, blocked_on_right=False)
+            left_boundary = Course_Boundary_Instruction(is_entrance=left_is_entrance, is_exit=left_is_exit, instruction=left_instruction, source_swatch_name=self.name,
+                                                        course_side=Course_Side.Left, carriage_pass_index=cp_index, blocked_on_left=False, blocked_on_right=blocked_pass)
+            right_boundary = Course_Boundary_Instruction(is_entrance=right_is_entrance, is_exit=right_is_exit, instruction=right_instruction, source_swatch_name=self.name,
+                                                         course_side=Course_Side.Right, carriage_pass_index=cp_index, blocked_on_left=blocked_pass, blocked_on_right=False)
             self._add_boundary_instruction(left_boundary)
             self._add_boundary_instruction(right_boundary)
 
@@ -205,11 +206,7 @@ class Swatch:
 
     def _get_wale_entrances(self) -> list[Wale_Boundary_Instruction]:
         if len(self._wale_groups) == 0:  # the program does not result in any courses to form wales.
-            needles_to_first_instruction = {}
-            for instruction in self.knitout_program:
-                if isinstance(instruction, Loop_Making_Instruction) and instruction.needle not in needles_to_first_instruction:
-                    needles_to_first_instruction[instruction.needle] = instruction
-            return [Wale_Boundary_Instruction(True, i, self.name) for i in needles_to_first_instruction.values()]
+            return []
         entrance_loops: set[Loop] = set()
         for wale_group in self._wale_groups.values():
             if isinstance(wale_group, Wale_Group):
@@ -232,7 +229,7 @@ class Swatch:
                 if (not isinstance(instruction, Miss_Instruction) and  # ignores misses since they don't result in loop actions
                         instruction.needle not in locked_needles and  # ignored locked needles since their entrance has already been decided
                         instruction.needle in entrance_needles):  # only consider needles that are entrances to the knitgraph.
-                    entrance = Wale_Boundary_Instruction(True, instruction, self.name)
+                    entrance = Wale_Boundary_Instruction(is_entrance=True, is_exit=False, instruction=instruction, source_swatch_name=self.name)
                     entrances_to_needles[instruction.needle] = entrance  # overrides unlocked tuck instructions on this location
                     if carriage_pass_is_locked or entrance.entrance_requires_loop:  # This instruction requires a prior instruction to place a loop either by tucked cast on or form prior swatch.
                         carriage_pass_is_locked = True
@@ -247,11 +244,7 @@ class Swatch:
 
     def _get_wale_exits(self) -> list[Wale_Boundary_Instruction]:
         if len(self._wale_groups) == 0:  # the program does not result in any courses to form wales.
-            needles_to_last_instruction = {}
-            for instruction in reversed(self.knitout_program):
-                if isinstance(instruction, Loop_Making_Instruction) and instruction.needle not in needles_to_last_instruction:
-                    needles_to_last_instruction[instruction.needle] = instruction
-            return [Wale_Boundary_Instruction(False, i, self.name) for i in needles_to_last_instruction.values()]
+            return []
         exit_needles: set[Needle] = set()
         for terminal_loop in self._wale_groups:
             assert isinstance(terminal_loop, Machine_Knit_Loop)
@@ -259,7 +252,7 @@ class Swatch:
         exits: list[Wale_Boundary_Instruction] = []
         for instruction in reversed(self.knitout_program):
             if isinstance(instruction, Needle_Instruction) and not isinstance(instruction, Miss_Instruction):
-                exit_boundary = Wale_Boundary_Instruction(False, instruction, self.name)
+                exit_boundary = Wale_Boundary_Instruction(is_entrance=False, is_exit=True, instruction=instruction, source_swatch_name=self.name)
                 include_exit = False
                 if exit_boundary.front_needle is not None and exit_boundary.front_needle in exit_needles:
                     exit_needles.remove(exit_boundary.front_needle)
@@ -271,7 +264,6 @@ class Swatch:
                     exits.append(exit_boundary)
                     if len(exit_needles) == 0:
                         return exits
-        # assert len(exit_needles) == 0, f"Exit needles is empty {exit_needles}"
         return exits
 
     def get_instruction_pass(self, instruction: Knitout_Line) -> Carriage_Pass | None:
@@ -379,19 +371,22 @@ class Swatch:
         else:
             return None
 
-    def get_wale_boundary_instruction(self, instruction: Knitout_Line) -> None | Wale_Boundary_Instruction:
+    def get_wale_boundary_instruction(self, instruction: Knitout_Line) -> Wale_Boundary_Instruction:
         """
         Args:
             instruction (Knitout_Line): The instruction owned by a boundary instruction.
 
         Returns:
-            None | Course_Boundary_Instruction: The course boundary instruction that owns the given instruction or None if the instruction is not on the wale boundary.
+            Wale_Boundary_Instruction: The wale boundary instruction that owns the given instruction.
+
+        Raises:
+            KeyError: If the given instruction is not on the wale boundary.
         """
         if self.instruction_on_wale_boundary(instruction):
             assert isinstance(instruction, Needle_Instruction)
             return self.instructions_on_wale_boundary[instruction]
         else:
-            return None
+            raise KeyError(f'The instruction {instruction} is not on the wale boundary.')
 
     def instruction_on_left_boundary(self, instruction: Knitout_Line) -> bool:
         """
@@ -421,7 +416,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is on the bottom wale boundary. False, otherwise.
         """
-        return self.instruction_on_wale_boundary(instruction) and cast(Wale_Boundary_Instruction, self.get_wale_boundary_instruction(instruction)).is_bottom
+        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_bottom
 
     def instruction_on_top_boundary(self, instruction: Knitout_Line) -> bool:
         """
@@ -431,7 +426,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is on the top wale boundary. False, otherwise.
         """
-        return self.instruction_on_wale_boundary(instruction) and cast(Wale_Boundary_Instruction, self.get_wale_boundary_instruction(instruction)).is_top
+        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_top
 
     def instruction_is_course_exit(self, instruction: Knitout_Line) -> bool:
         """
@@ -451,7 +446,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is an exit to a wale boundary. False, otherwise.
         """
-        return self.instruction_on_wale_boundary(instruction) and cast(Wale_Boundary_Instruction, self.get_wale_boundary_instruction(instruction)).is_exit
+        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_exit
 
     def instruction_is_course_entrance(self, instruction: Knitout_Line) -> bool:
         """
@@ -471,7 +466,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is an entrance to a wale boundary. False, otherwise.
         """
-        return self.instruction_on_wale_boundary(instruction) and cast(Wale_Boundary_Instruction, self.get_wale_boundary_instruction(instruction)).is_entrance
+        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_entrance
 
     @property
     def name(self) -> str:
@@ -749,3 +744,27 @@ class Swatch:
                 return total_passes + 1  # Note: Add 1 to ensure this passes is captured in the count.
         # If we didn't reach the requested course_pass_count, return height of this swatch.
         return self.height
+
+    def remove_cast_on_boundary(self) -> Swatch:
+        """
+        Returns:
+            Swatch: A swatch of the same name as this swatch that has the tucks at the bottom of all wales removed.
+        """
+        new_knitout = []
+        knit_needles = set()
+        for k_index, knitout_line in enumerate(self.knitout_program):
+            if isinstance(knitout_line, Needle_Instruction):
+                if knitout_line.needle in knit_needles:  # includes tucks on marked needles
+                    if isinstance(knitout_line.needle_2, Needle):  # Xfers and Splits from a marked needle.
+                        knit_needles.add(knitout_line.needle_2)
+                    new_knitout.append(knitout_line)
+                elif isinstance(knitout_line, Loop_Making_Instruction) and not isinstance(knitout_line, Tuck_Instruction):
+                    knit_needles.add(knitout_line.needle)
+                    if isinstance(knitout_line.needle_2, Needle):  # splits from a newly marked needle
+                        knit_needles.add(knitout_line.needle_2)
+                    new_knitout.append(knitout_line)
+            else:  # Non needle instructions get added
+                new_knitout.append(knitout_line)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
+            return Swatch(self.name, new_knitout)

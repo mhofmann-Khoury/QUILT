@@ -77,9 +77,9 @@ exclude = [
 python = ">=3.11,<3.13"
 knit-graphs = ">=0.0.9"
 knitout-interpreter = ">=0.0.22"
-virtual-knitting-machine = ">=0.0.19"
+virtual-knitting-machine = ">=0.0.20"
 intervaltree = "^3.1.0"
-knitout-to-dat-python = ">=0.0.2"
+knitout-to-dat-python = ">=0.0.3"
 
 [tool.poetry.group.dev.dependencies]
 importlib-resources = ">=6.5.2"

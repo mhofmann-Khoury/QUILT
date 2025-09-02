@@ -6,10 +6,10 @@ from enum import Enum
 
 from knitout_interpreter.knitout_operations.needle_instructions import (
     Drop_Instruction,
-    Knit_Instruction,
     Miss_Instruction,
     Split_Instruction,
     Tuck_Instruction,
+    Xfer_Instruction,
 )
 from virtual_knitting_machine.machine_components.needles.Needle import Needle
 
@@ -87,16 +87,6 @@ class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
         """
         self._connections_made += 1
 
-    def entrance_replaced_with_tuck(self) -> None | Tuck_Instruction:
-        """
-        Returns:
-            None | Tuck_Instruction: None iff this not an entrance or is not a knit instruction that can be replaced by a tuck. Otherwise, the tuck instruction that replaces the knit.
-        """
-        if self.is_entrance and isinstance(self.instruction, Knit_Instruction):
-            return Tuck_Instruction(self.instruction.needle, self.instruction.direction, self.instruction.carrier_set, "Replaced unaligned knit with tuck")
-        else:
-            return None
-
     @property
     def swatch_side(self) -> Wale_Side:
         """
@@ -112,13 +102,29 @@ class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
             return Wale_Side.Top  # exit from the top of a swatch.
 
     @property
-    def is_exit(self) -> bool:
+    def entrance_needle(self) -> Needle:
         """
-        Indicates if this instruction exits from a wale.
         Returns:
-            bool: True if this not an entrance instruction. False, otherwise.
+            Needle: The needle that the instruction enters.
         """
-        return not self.is_entrance
+        return self.needle
+
+    @property
+    def exit_needle(self) -> None | Needle | tuple[Needle, Needle]:
+        """
+        Returns:
+            None | Needle | tuple[Needle, Needle]: The needle or needles (split) that loops are left on after the instruction is executed. None if the instruction drops the loops.
+        """
+        if isinstance(self.instruction, Drop_Instruction) or isinstance(self.instruction, Miss_Instruction):
+            return None
+        elif isinstance(self.instruction, Split_Instruction):
+            assert isinstance(self.instruction.needle_2, Needle)
+            return self.needle, self.instruction.needle_2
+        elif isinstance(self.instruction, Xfer_Instruction):
+            assert isinstance(self.instruction.needle_2, Needle)
+            return self.instruction.needle_2
+        else:
+            return self.needle
 
     @property
     def front_needle(self) -> None | Needle:
@@ -160,65 +166,85 @@ class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
         Returns:
             bool: True if this is an entrance instruction that requires an input loop at the operating needle. False, otherwise.
         """
-        if self.is_exit:
+        return self.is_entrance and self.entrance_needle is not None
+
+    @property
+    def enters_front_needle(self) -> bool:
+        """
+        Returns:
+            bool: True if this is an entrance instruction that must align a front bed needle to form a connection. False, otherwise.
+        """
+        return self.entrance_requires_loop and self.entrance_needle.is_front
+
+    @property
+    def exits_front_needle(self) -> bool:
+        """
+        Returns:
+            bool: True if this is an exit instruction that leaves loops on a front needle. False, otherwise.
+        """
+        if not self.is_exit:
             return False
-        else:
-            return not isinstance(self.instruction, Tuck_Instruction) and not isinstance(self.instruction, Miss_Instruction)
-
-    @property
-    def exit_drops_loop(self) -> bool:
-        """
-        Returns:
-            bool: True if this is an exit instruction that drops a loop. False, otherwise.
-        """
-        return self.is_exit and isinstance(self.instruction, Drop_Instruction)
-
-    @property
-    def requires_front_needle_alignment(self) -> bool:
-        """
-        Returns:
-            bool: True if the boundary instruction must align a front bed needle to form a connection. False, otherwise.
-        """
-        if self.is_entrance:
-            if self.entrance_requires_loop:
-                return bool(self.needle.is_front)
+        exit_needle = self.exit_needle
+        if exit_needle is None:
+            return False
+        elif isinstance(exit_needle, Needle):
+            if exit_needle.is_front:
+                return True
             else:
-                return False  # Tuck operation requires no alignment
-        else:
-            assert self.is_exit
-            if self.exit_drops_loop:
                 return False
-            else:
-                return self.front_needle is not None
+        else: # Split front and back bed
+            return True
 
     @property
-    def requires_back_needle_alignment(self) -> bool:
+    def enters_back_needle(self) -> bool:
         """
         Returns:
-            bool: True if the boundary instruction must align a back bed needle to form a connection. False, otherwise.
+            bool: True if this is an entrance instruction that must align a back bed needle to form a connection. False, otherwise.
         """
-        if self.is_entrance:
-            if self.entrance_requires_loop:
-                return bool(self.needle.is_back)
+        return self.entrance_requires_loop and self.entrance_needle.is_back
+
+    @property
+    def exits_back_needle(self) -> bool:
+        """
+        Returns:
+            bool: True if this is an exit instruction that leaves loops on a back needle. False, otherwise.
+        """
+        if not self.is_exit:
+            return False
+        exit_needle = self.exit_needle
+        if exit_needle is None:
+            return False
+        elif isinstance(exit_needle, Needle):
+            if exit_needle.is_back:
+                return True
             else:
-                return False  # tuck operation requires no alignment
-        else:
-            assert self.is_exit
-            if self.exit_drops_loop:
                 return False
-            else:
-                return self.back_needle is not None
+        else:  # Split front and back bed
+            return True
 
     @property
-    def required_connections(self) -> int:
+    def requires_entrance_connection(self) -> bool:
         """
         Returns:
-            int: The number of connections required to satisfy alignment to this instruction.
-            * 0 Connections means that no connections are required (exit that drops loop or entrance that does not require alignment).
-            * 1 Connection means that the exit leaves one loop or an entrance requires one loop.
-            * 2 Connections means that this is a split exit that requires both loops to be aligned.
+            bool: True if this is an entrance instruction that must be connected (not a tuck). False, otherwise.
         """
-        return sum([self.requires_front_needle_alignment, self.requires_back_needle_alignment])
+        return self.is_entrance and not isinstance(self.instruction, Tuck_Instruction)
+
+    @property
+    def required_exit_connections(self) -> int:
+        """
+        Returns:
+            int: The number of connections required to satisfy this exit instruction.
+            * 0 if this is not an exit or if the exit drops loops.
+            * 1 if this exit leaves loops on one needle.
+            * 2 if this exit leaves loops on two needles (split).
+        """
+        if not self.is_exit or self.exit_needle is None:
+            return 0
+        elif isinstance(self.exit_needle, tuple):
+            return 2
+        else:
+            return 1
 
     @property
     def is_top(self) -> bool:
@@ -241,7 +267,17 @@ class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
         Returns:
             str: A string representation of the connection requirements and direction into this instruction.
         """
+        string = ""
         if self.is_entrance:
-            return f"{self.required_connections}^{self.instruction}"
-        else:
-            return f"{self.instruction}^{self.required_connections}"
+            string += "^"
+        string += str(self.instruction).strip()
+        if self.is_exit:
+            string += f"^{self.required_exit_connections}"
+        return string
+
+    def __repr__(self) -> str:
+        """
+        Returns:
+            str: A string representation of the connection requirements and direction into this instruction.
+        """
+        return str(self)

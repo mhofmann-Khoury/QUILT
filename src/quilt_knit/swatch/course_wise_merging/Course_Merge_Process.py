@@ -100,24 +100,6 @@ class Course_Merge_Process:
         elif self.course_wise_connection.left_start_direction is Carriage_Pass_Direction.Rightward:
             self.current_swatch_side: Course_Side = Course_Side.Left
 
-    # def get_source_carriage_pass_index(self, instruction: Knitout_Line) -> int | None:
-    #     """
-    #     Args:
-    #         instruction (Knitout_Line): The instruction to find the carriage pass index of.
-    #
-    #     Returns:
-    #         int | None: Get the carriage pass index of the given instruction in its originating swatch or None if the instruction is not in either swatch.
-    #     """
-    #     if instruction in self.merged_instruction_to_course_side:
-    #         course_side = self.merged_instruction_to_course_side[instruction]
-    #         if course_side is Course_Side.Left:
-    #             return self.left_swatch.get_cp_index_of_instruction(instruction)
-    #         else:
-    #             assert course_side is Course_Side.Right
-    #             return self.right_swatch.get_cp_index_of_instruction(instruction)
-    #     else:
-    #         return None
-
     @property
     def right_swatch(self) -> Swatch:
         """

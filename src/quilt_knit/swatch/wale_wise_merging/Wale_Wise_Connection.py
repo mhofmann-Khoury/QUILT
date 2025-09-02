@@ -15,7 +15,7 @@ class Wale_Wise_Connection(Swatch_Connection):
 
     def __init__(self, bottom_swatch: Swatch, top_swatch: Swatch,
                  bottom_leftmost_needle_position: int = 0, bottom_rightmost_needle_position: int | None = None,
-                 top_leftmost_needle_position: int = 0, top_rightmost_needle_position: int | None = None):
+                 top_leftmost_needle_position: int = 0, top_rightmost_needle_position: int | None = None, remove_cast_ons: bool = True):
         if bottom_rightmost_needle_position is None:
             bottom_rightmost_needle_position = bottom_swatch.width - 1
         if top_rightmost_needle_position is None:
@@ -24,6 +24,8 @@ class Wale_Wise_Connection(Swatch_Connection):
         top_leftmost_needle_position = max(0, top_leftmost_needle_position)
         bottom_rightmost_needle_position = min(bottom_rightmost_needle_position, bottom_swatch.height)  # regulate right side of the connection
         top_rightmost_needle_position = min(top_rightmost_needle_position, top_swatch.height)
+        if remove_cast_ons:
+            top_swatch = top_swatch.remove_cast_on_boundary()
         super().__init__(bottom_swatch, top_swatch,
                          bottom_leftmost_needle_position, bottom_rightmost_needle_position,
                          top_leftmost_needle_position, top_rightmost_needle_position,

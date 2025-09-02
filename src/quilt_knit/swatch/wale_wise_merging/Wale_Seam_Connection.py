@@ -30,8 +30,7 @@ class Wale_Seam_Connection:
         Returns:
             bool: True if this connection can satisfy alignment of loops. False, otherwise.
         """
-        return (self.exit_instruction.required_connections != 0  # Exit instruction does not drop a loop and needs to be aligned.
-                and self.entrance_instruction.required_connections != 0)  # Entrance instruction requires a loop to operate.
+        return self.exit_instruction.required_exit_connections > 0 and self.entrance_instruction.requires_entrance_connection
 
     def minimum_instructions_to_connect_to_entrance(self, max_rack: int = 3) -> list[Knitout_Instruction] | None:
         """
@@ -51,7 +50,7 @@ class Wale_Seam_Connection:
             return None
         connect_to_front = self.minimum_instructions_required_to_front_entrance(max_rack)
         if connect_to_front is None:
-            return self.minimum_instructions_required_to_back_entrance()
+            return self.minimum_instructions_required_to_back_entrance(max_rack)
         else:
             return connect_to_front
 
@@ -70,12 +69,11 @@ class Wale_Seam_Connection:
                 2. An optional racking instruction to align loops on the opposite bed of the entrance with the entrance instruction.
                 3. A transfer from the opposite bed to the entrance instruction to place the exit loop on the entrance needle.
         """
-        if self.entrance_instruction.requires_front_needle_alignment:  # Find alignment instruction to front bed entrance.
-            if (self.exit_instruction.requires_front_needle_alignment  # There is an exit loop on the front bed that could already be aligned.
-                    and self.entrance_instruction.needle == self.exit_instruction.front_needle):  # The exit and entrance are already aligned. No Instructions required.
-                return []
+        if self.entrance_instruction.enters_front_needle:  # Find alignment instruction to front bed entrance.
+            if self.exit_instruction.exits_front_needle and self.entrance_instruction.front_needle == self.exit_instruction.front_needle:
+                return []  # The exit and entrance are already aligned. No Instructions required.
             alignment_instructions = []
-            if not self.exit_instruction.requires_back_needle_alignment:  # No exit on back to transfer onto front bed entrance
+            if not self.exit_instruction.exits_back_needle:  # No exit on back to transfer onto front bed entrance
                 exit_back_needle: Needle = Slider_Needle(is_front=False, position=cast(Needle, self.exit_instruction.front_needle).position)
                 alignment_instructions.append(Xfer_Instruction(self.exit_instruction.front_needle, exit_back_needle,
                                                                comment=f"Hold exit on {self.exit_instruction.front_needle} on back slider"))
@@ -92,31 +90,6 @@ class Wale_Seam_Connection:
         else:
             return None
 
-    def required_rack(self) -> int:
-        """
-        Returns:
-            int: The racking required to perform the minimum alignment between this exit and entrance instruction.
-
-        Notes:
-            * This does not check that the instructions require alignment (e.g., exit drops or entrance tucks).
-        """
-        if self.entrance_instruction.requires_front_needle_alignment:
-            if self.exit_instruction.two_needle_exit:
-                if self.entrance_instruction.needle == self.exit_instruction.front_needle:
-                    return 0
-                else:
-                    return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.entrance_instruction.front_needle).position, back_pos=cast(Needle, self.exit_instruction.back_needle).position))
-            else:
-                return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.entrance_instruction.front_needle).position, back_pos=cast(Needle, self.exit_instruction.needle).position))
-        else:  # back needle alignment
-            if self.exit_instruction.two_needle_exit:
-                if self.entrance_instruction.needle == self.exit_instruction.back_needle:
-                    return 0
-                else:
-                    return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.exit_instruction.front_needle).position, back_pos=cast(Needle, self.entrance_instruction.back_needle).position))
-            else:
-                return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.exit_instruction.needle).position, back_pos=cast(Needle, self.entrance_instruction.back_needle).position))
-
     def minimum_instructions_required_to_back_entrance(self, max_rack: int = 3) -> list[Knitout_Instruction] | None:
         """
         Args:
@@ -132,12 +105,11 @@ class Wale_Seam_Connection:
                 2. An optional racking instruction to align loops on the opposite bed of the entrance with the entrance instruction.
                 3. A transfer from the opposite bed to the entrance instruction to place the exit loop on the entrance needle.
         """
-        if self.entrance_instruction.requires_back_needle_alignment:  # Find alignment instruction to back bed entrance
-            if (self.exit_instruction.requires_back_needle_alignment  # There is an exit loop on the back bed that could already be aligned.
-                    and self.entrance_instruction.needle == self.exit_instruction.back_needle):  # The exit and entrance are already aligned. No Instructions required.
+        if self.entrance_instruction.enters_back_needle:  # Find alignment instruction to back bed entrance
+            if self.exit_instruction.exits_back_needle and self.entrance_instruction.back_needle == self.exit_instruction.back_needle:
                 return []
             alignment_instructions = []
-            if not self.exit_instruction.requires_front_needle_alignment:  # No exit on front to transfer onto back bed entrance:
+            if not self.exit_instruction.exits_front_needle:  # No exit on front to transfer onto back bed entrance:
                 exit_front_needle = Slider_Needle(is_front=True, position=cast(Needle, self.exit_instruction.back_needle).position)
                 alignment_instructions.append(Xfer_Instruction(self.exit_instruction.back_needle, exit_front_needle,
                                                                comment=f"Hold exit on {self.exit_instruction.needle} on front slider"))
@@ -154,22 +126,47 @@ class Wale_Seam_Connection:
         else:
             return None
 
+    def required_rack(self) -> int:
+        """
+        Returns:
+            int: The racking required to perform the minimum alignment between this exit and entrance instruction.
+
+        Notes:
+            * This does not check that the instructions require alignment (e.g., exit drops or entrance tucks).
+        """
+        if self.entrance_instruction.enters_front_needle:
+            if self.exit_instruction.two_needle_exit:
+                if self.entrance_instruction.needle == self.exit_instruction.front_needle:
+                    return 0
+                else:
+                    return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.entrance_instruction.front_needle).position, back_pos=cast(Needle, self.exit_instruction.back_needle).position))
+            else:
+                return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.entrance_instruction.front_needle).position, back_pos=cast(Needle, self.exit_instruction.needle).position))
+        else:  # back needle alignment
+            if self.exit_instruction.two_needle_exit:
+                if self.entrance_instruction.needle == self.exit_instruction.back_needle:
+                    return 0
+                else:
+                    return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.exit_instruction.front_needle).position, back_pos=cast(Needle, self.entrance_instruction.back_needle).position))
+            else:
+                return int(Knitting_Machine.get_rack(front_pos=cast(Needle, self.exit_instruction.needle).position, back_pos=cast(Needle, self.entrance_instruction.back_needle).position))
+
     def better_connection(self, other: Wale_Seam_Connection) -> bool:
         """
         Args:
             other (Wale_Seam_Connection): The other connection to compare to.
 
         Returns:
-            bool: True if this connection is better than or equal to the other connection. Connections are better if they can form a connection and do so with fewer operations.
+            bool: True if this connection is better than the other connection. Connections are better if they can form a connection and do so with fewer operations.
         """
         minimum_instructions_for_self = self.minimum_instructions_to_connect_to_entrance()
         minimum_instructions_for_other = other.minimum_instructions_to_connect_to_entrance()
-        if minimum_instructions_for_other is None:
-            return True  # This is equal to (no alignment solution) or better than the other solution.
-        elif minimum_instructions_for_self is None:
-            return False  # The other connection is better because it has some solution.
+        if minimum_instructions_for_self is None:
+            return False  # This is equal to (no alignment solution) or worse than an aligned solution.
+        elif minimum_instructions_for_other is None:
+            return False  # The other connection is worse because it has no alignment
         else:
-            return len(minimum_instructions_for_self) <= len(minimum_instructions_for_other)
+            return len(minimum_instructions_for_self) < len(minimum_instructions_for_other)
 
     def __lt__(self, other: Wale_Seam_Connection) -> bool:
         """
@@ -177,6 +174,17 @@ class Wale_Seam_Connection:
             other (Wale_Seam_Connection): The other connection to compare to.
 
         Returns:
-            bool: True if this connection is strictly worse than the other connection. A connection is better if it can form a connection in fewer operations.
+            bool: True if this connection is strictly better than the other connection. A connection is better if it can form a connection in fewer operations.
         """
-        return not self.better_connection(other)
+        return self.better_connection(other)
+
+    @staticmethod
+    def sort_connections(connections: list[Wale_Seam_Connection]) -> list[Wale_Seam_Connection]:
+        """
+        Args:
+            connections (list[Wale_Seam_Connection]): The list of connections to sort.
+
+        Returns:
+            List[Wale_Seam_Connection]: The sorted list of connections.
+        """
+        return sorted(connections)
