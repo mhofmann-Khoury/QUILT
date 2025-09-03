@@ -334,7 +334,7 @@ class Quilt:
             self.add_swatch(swatch)
             return
         prior_connections = set(c for c in prior_connections if swatch in c or match_prior_swatch in c)
-        prior_course_wise_connections= set(c for c in prior_connections if isinstance(c, Course_Wise_Connection))
+        prior_course_wise_connections = set(c for c in prior_connections if isinstance(c, Course_Wise_Connection))
         prior_wale_wise_connections = set(c for c in prior_connections if isinstance(c, Wale_Wise_Connection))
         if match_prior_swatch is not None:
             if isinstance(shift_match_course_interval, dict):

@@ -5,7 +5,7 @@ import copy
 import warnings
 from typing import cast
 
-from knit_graphs.artin_wale_braids.Wale_Group import Wale_Group
+from knit_graphs.artin_wale_braids.Wale import Wale
 from knit_graphs.Knit_Graph import Knit_Graph
 from knit_graphs.Loop import Loop
 from knitout_interpreter.knitout_execution import Knitout_Executer
@@ -34,9 +34,6 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
 from knitout_interpreter.knitout_operations.Rack_Instruction import Rack_Instruction
 from knitout_to_dat_python.knitout_to_dat import knitout_to_dat
 from virtual_knitting_machine.Knitting_Machine import Knitting_Machine
-from virtual_knitting_machine.knitting_machine_exceptions.Yarn_Carrier_Error_State import (
-    Use_Inactive_Carrier_Exception,
-)
 from virtual_knitting_machine.knitting_machine_warnings.Needle_Warnings import (
     Knit_on_Empty_Needle_Warning,
 )
@@ -55,50 +52,17 @@ from quilt_knit.swatch.course_boundary_instructions import (
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
 
 
-def inject_carriers(knitout_program: list[Knitout_Line], prior_machine_state: Knitting_Machine,
-                    _previously_injected_carriers: set[int] | None = None,
-                    accepted_error_types: list | None = None) -> Knitout_Executer:
+def get_terminal_wales(knit_graph: Knit_Graph) -> dict[Loop, list[Wale]]:
+    """Get wale groups organized by their terminal loops.
+    # TODO Fix this behavior in knit graphs
+    Returns:
+        dict[Loop, list[Wale]]: Dictionary mapping terminal loops to list of wales that terminate that wale.
     """
-    The function recursively injects inhook-releasehook instructions for missing carriers to make the given knitout program run without Use_Inactive_Carrier_Exceptions.
-    Each carrier will only be injected once in a program to prevent infinite loops.
-    If a carrier is needed more than once, or it is outhooked, in the given program, program will raise the exception.
-    :param accepted_error_types: List of accepted error types for the executer to override.
-    :param knitout_program: The original Knitting program to modify.
-    :param prior_machine_state: The knitting machine state prior to execution of the program.
-    :param _previously_injected_carriers: A set of carriers that were previously injected and should be ignored.
-    :return: A knitout executer which has successfully executed the given knitout program with injected carriers.
-
-    """
-    if _previously_injected_carriers is None:
-        _previously_injected_carriers = set()
-    try:
-        knitout_executer = Knitout_Executer(knitout_program, prior_machine_state, accepted_error_types=accepted_error_types)
-        return knitout_executer
-    except Use_Inactive_Carrier_Exception as e:
-        if e.carrier_id not in _previously_injected_carriers:
-            _previously_injected_carriers.add(e.carrier_id)
-            insert_index = -1
-            current_direction = None
-            for index, instruction in enumerate(knitout_program):
-                if isinstance(instruction, Outhook_Instruction):
-                    _previously_injected_carriers.add(instruction.carrier_id)
-                elif isinstance(instruction, Loop_Making_Instruction) and e.carrier_id in instruction.carrier_set.carrier_ids:
-                    knitout_program.insert(index, Inhook_Instruction(e.carrier_id, f"Injected Inhook"))
-                    insert_index = index + 1
-                    current_direction = instruction.direction
-                    break
-            injected_release = False
-            for index, instruction in enumerate(knitout_program[insert_index:]):
-                index += insert_index
-                if not isinstance(instruction, Needle_Instruction) or instruction.direction != current_direction:
-                    knitout_program.insert(index, Releasehook_Instruction(e.carrier_id, f"Injected Releasehook"))
-                    injected_release = True
-                    break
-            if not injected_release:
-                knitout_program.append(Releasehook_Instruction(e.carrier_id, "Injected Releasehook"))
-            return inject_carriers(knitout_program, prior_machine_state, _previously_injected_carriers, accepted_error_types=accepted_error_types)
-        else:
-            raise e
+    wale_groups = {}
+    for loop in knit_graph:
+        if knit_graph.is_terminal_loop(loop):
+            wale_groups[loop] = [wale for wale in knit_graph.get_wales_ending_with_loop(loop)]
+    return wale_groups
 
 
 class Swatch:
@@ -107,8 +71,7 @@ class Swatch:
         Used for linking swatches to form Quilts.
     """
 
-    def __init__(self, name: str, knitout_program: str | list[Knitout_Line], prior_machine_state: Knitting_Machine | None = None,
-                 inject_missing_carriers: bool = True):
+    def __init__(self, name: str, knitout_program: str | list[Knitout_Line], prior_machine_state: Knitting_Machine | None = None):
         self._name: str = name
         knitout_context: Knitout_Context = Knitout_Context()
         if isinstance(knitout_program, str):
@@ -121,7 +84,7 @@ class Swatch:
             self.original_machine_state = self.original_machine_state.copy(prior_machine_state)
         else:
             prior_machine_state = Knitting_Machine()
-        self._execute_knitout(prior_machine_state, inject_missing_carriers)
+        self._execute_knitout(prior_machine_state)
         self.course_boundary_instructions: dict[Course_Boundary_Instruction, Carriage_Pass] = {}
         self.instructions_on_course_boundary: dict[Needle_Instruction, Course_Boundary_Instruction] = {}
         self._instruction_to_carriage_pass: dict[Needle_Instruction, Carriage_Pass] = {}
@@ -132,7 +95,7 @@ class Swatch:
             for instruction in cp:
                 self._instruction_to_carriage_pass[instruction] = cp
         self._process_course_boundaries()
-        self._wale_groups: dict[Loop, Wale_Group | Loop] = self.execution_knit_graph.get_wale_groups()
+        self._terminal_wales: dict[Loop, list[Wale]] = get_terminal_wales(self.execution_knit_graph) # Todo update knitgraph to handle this
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
         self.instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
@@ -178,19 +141,18 @@ class Swatch:
             self._add_boundary_instruction(left_boundary)
             self._add_boundary_instruction(right_boundary)
 
-    def _execute_knitout(self, prior_machine_state: Knitting_Machine, inject_missing_carriers: bool) -> None:
+    def _execute_knitout(self, prior_machine_state: Knitting_Machine) -> None:
         """
         Sets the _knitout_execution property.
         If the set to inject missing carriers, this will modify the knitout program to avoid Use_Inactive_Carrier_Exceptions.
-        :param prior_machine_state: The machine state prior to execution.
-        :param inject_missing_carriers: If True, allows update to fix the knitout program.
+        Args:
+            prior_machine_state (Knitting_Machine): The machine state prior to execution of the Swatch
         """
         original_prior = prior_machine_state
         first_pass_prior_machine_state = original_prior
-        if not inject_missing_carriers:
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
             self._knitout_execution: Knitout_Executer = Knitout_Executer(self.knitout_program, first_pass_prior_machine_state)
-        else:
-            self._knitout_execution = inject_carriers(self.knitout_program, first_pass_prior_machine_state)
         self.knitout_program = self._knitout_execution.executed_instructions  # set the knitout program to be the program that is produced by successful execution.
 
     def print_program(self, output_name: str | None = None) -> None:
@@ -205,19 +167,19 @@ class Swatch:
             output_file.writelines(str(instruction) for instruction in self.knitout_program)
 
     def _get_wale_entrances(self) -> list[Wale_Boundary_Instruction]:
-        if len(self._wale_groups) == 0:  # the program does not result in any courses to form wales.
+        if len(self._terminal_wales) == 0:  # the program does not result in any courses to form wales.
             return []
         entrance_loops: set[Loop] = set()
-        for wale_group in self._wale_groups.values():
-            if isinstance(wale_group, Wale_Group):
-                entrance_loops.update(wale_group.bottom_loops.keys())
+        wales_to_find_entrances = set()
+        for wales in self._terminal_wales.values():
+            wales_to_find_entrances.update(wales)
+        while len(wales_to_find_entrances) > 0:
+            wale = wales_to_find_entrances.pop()
+            if wale.first_loop.has_parent_loops():
+                wales_to_find_entrances.update(self.execution_knit_graph.get_wales_ending_with_loop(wale.first_loop))
             else:
-                assert isinstance(wale_group, Loop)
-                entrance_loops.add(wale_group)
-        entrance_needles: set[Needle] = set()
-        for l in entrance_loops:
-            assert isinstance(l, Machine_Knit_Loop)
-            entrance_needles.add(l.source_needle)
+                entrance_loops.add(wale.first_loop)
+        entrance_needles: set[Needle] = set(l.source_needle for l in entrance_loops if isinstance(l, Machine_Knit_Loop))
         locked_needles: set[Needle] = set()
         entrances_to_needles: dict[Needle, Wale_Boundary_Instruction] = {}
         for carriage_pass in self.carriage_passes:
@@ -243,12 +205,9 @@ class Swatch:
         return [*entrances_to_needles.values()]
 
     def _get_wale_exits(self) -> list[Wale_Boundary_Instruction]:
-        if len(self._wale_groups) == 0:  # the program does not result in any courses to form wales.
+        if len(self._terminal_wales) == 0:  # the program does not result in any courses to form wales.
             return []
-        exit_needles: set[Needle] = set()
-        for terminal_loop in self._wale_groups:
-            assert isinstance(terminal_loop, Machine_Knit_Loop)
-            exit_needles.add(terminal_loop.last_needle)
+        exit_needles: set[Needle] = set(l.last_needle for l in self._terminal_wales if isinstance(l, Machine_Knit_Loop))
         exits: list[Wale_Boundary_Instruction] = []
         for instruction in reversed(self.knitout_program):
             if isinstance(instruction, Needle_Instruction) and not isinstance(instruction, Miss_Instruction):
@@ -723,7 +682,7 @@ class Swatch:
             return copy_instruction
 
         shifted_instructions = [shift_swatch_instruction(i) for i in self.knitout_program]
-        return Swatch(f"{self.name}_shifted_right_{shift_needle_count}", shifted_instructions, inject_missing_carriers=False)
+        return Swatch(f"{self.name}_shifted_right_{shift_needle_count}", shifted_instructions)
 
     def find_carriage_pass_from_course_passes(self, course_pass_count: int) -> int:
         """

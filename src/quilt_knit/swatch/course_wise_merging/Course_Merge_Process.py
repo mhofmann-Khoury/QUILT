@@ -857,7 +857,7 @@ class Course_Merge_Process:
 
             """
             jump_distance = self._get_distance_to_connection_jump(c)
-            if jump_distance >= max_cp_jumps:
+            if jump_distance > max_cp_jumps:
                 return False
             return not self._has_dangerous_float(c)
 
@@ -1096,6 +1096,19 @@ class Course_Merge_Process:
             raise ValueError(f"Could not find {instruction} in left or right swatch")
         return cp_index
 
+    def _consume_connection(self, connection: Course_Seam_Connection) -> None:
+        """
+        Consumes instructions from both swatches to form the given connection. Removes any possible connections consumed in this process.
+        Args:
+            connection (Course_Seam_Connection): The connection to merge into the swatch.
+        """
+        self.current_swatch_side = connection.exit_instruction.course_side.opposite
+        self._consume_to_instruction(connection.exit_instruction.instruction, remove_connections=True)
+        self._consume_next_instruction(remove_connections=True)  # Consume the exit instruction.
+        self.swap_swatch_sides()
+        self._consume_to_instruction(connection.entrance_instruction.instruction, remove_connections=True)
+        self._consume_next_instruction(remove_connections=True)  # Consume the entrance instruction.
+
     def merge_swatches(self, xfer_exit_buffer: int = 5) -> [Knitout_Line]:
         """
         Merges the left and right swatch and forms a merged swatch program and updates the machine state according to that merged program.
@@ -1114,10 +1127,17 @@ class Course_Merge_Process:
             if self.next_instruction is None:  # Swatch is fully consumed.
                 self.swap_swatch_sides()
                 break  # end the merge process and continue into the next swatch.
-            if self._current_swatch_consumed():
-                # Swatch was consumed up to target course
+            if self._current_swatch_consumed():  # Swatch was consumed up to target course
                 break  # end merge process without swapping. The remainder of the courses will be consumed before completing the next swatch.
-            elif self.next_instruction_is_boundary_exit:
+            best_connection = None
+            if self.next_instruction_is_boundary_entrance:
+                entrance_instruction = self.current_swatch.get_course_boundary_instruction(self.next_instruction)
+                assert isinstance(entrance_instruction, Course_Boundary_Instruction)
+                assert entrance_instruction.is_entrance
+                best_connection = self.best_connection(entrance_instruction)
+                if best_connection is not None:  # Otherwise continue in the current swatch, ignoring that possible connection.
+                    self._consume_connection(best_connection)
+            if best_connection is None and self.next_instruction_is_boundary_exit:  # No connections found by entrance, try an exit
                 exit_instruction = self.current_swatch.get_course_boundary_instruction(self.next_instruction)
                 assert isinstance(exit_instruction, Course_Boundary_Instruction)
                 assert exit_instruction.is_exit
@@ -1125,22 +1145,10 @@ class Course_Merge_Process:
                     best_connection = None
                 else:
                     best_connection = self.best_connection(exit_instruction)
-                self._consume_next_instruction(remove_connections=True)  # Consumes the exit instruction
-                if best_connection is not None:  # Otherwise continue in the current swatch, ignoring that possible connection
-                    self.swap_swatch_sides()
-                    self._consume_to_instruction(best_connection.entrance_instruction.instruction)
-                    self._consume_next_instruction(remove_connections=True)  # consumes the entrance
-            elif self.next_instruction_is_boundary_entrance:
-                entrance_instruction = self.current_swatch.get_course_boundary_instruction(self.next_instruction)
-                assert isinstance(entrance_instruction, Course_Boundary_Instruction)
-                assert entrance_instruction.is_entrance
-                best_connection = self.best_connection(entrance_instruction)
                 if best_connection is not None:  # Otherwise continue in the current swatch, ignoring that possible connection.
-                    self.swap_swatch_sides()
-                    self._consume_to_instruction(best_connection.exit_instruction.instruction)  # Consume up from the other swatch to the exit that aligns with the found entrance.
-                    self._consume_next_instruction(remove_connections=True)  # Consume the exit before the entrance connection is formed.
-                    self.swap_swatch_sides()  # swap back to the current swatch and continue from the found entrance instruction.
-                self._consume_next_instruction(remove_connections=True)
+                    self._consume_connection(best_connection)
+            if best_connection is None: # No connection was found either as an exit or an entrance. Continue merging.
+                self._consume_next_instruction(remove_connections=True)  # Skip over this instruction and continue iterating through the current swatch
 
         # Consume remainder of current swatch
         self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, remove_connections=True)

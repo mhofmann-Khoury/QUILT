@@ -1,8 +1,6 @@
 """Module containing the Course Wise Connection class."""
 from __future__ import annotations
 
-from typing import cast
-
 from intervaltree import Interval
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
