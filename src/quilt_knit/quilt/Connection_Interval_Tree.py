@@ -33,10 +33,10 @@ class Connection_Interval_Tree:
         """
         A connection is blocked by this tree if the following criteria are met:
         * It involves the source swatch of this tree.
-        * The connection overlaps, but does not envelop, an existing connection in the tree
+        * The connection overlaps, but does not envelop, an existing connection in the tree.
 
         Args:
-            connection (Swatch_Connection): The connection that may be blocked by connections in this tree
+            connection (Swatch_Connection): The connection that may be blocked by connections in this tree.
 
         Returns:
             bool: True if the given connection is blocked, False otherwise.
