@@ -40,10 +40,10 @@ class Swatch_Connection:
         """
         return self.from_swatch == other_connection.from_swatch and self.to_swatch == other_connection.to_swatch
 
-    def __contains__(self, swatch: Swatch) -> bool:
+    def __contains__(self, swatch: Swatch | None) -> bool:
         """
         Args:
-            swatch (Swatch): The swatch to check for in this connection.
+            swatch (Swatch | None): The swatch to check for in this connection. A None value will return False.
 
         Returns:
             bool: True if the swatch is involved in this connection. False, otherwise.
@@ -380,16 +380,8 @@ class Swatch_Connection:
                 The connection to replace the prior connection given this connection.
                 * If the prior connection is None or does not involve these swatches, this connection is returned unchanged.
                 * If the prior connection subsumes this connection, None is returned and no updated connection is needed.
-                * If the prior connection overlaps this connection, a connection that merges both connection sis returned.
+                * If the prior connection overlaps this connection, a connection that merges both connection is returned.
                 * Otherwise, the two connections do not touch and this connection is returned unchanged to replace the prior connection.
-        """
-        """
-        :param prior_connection: The prior connection to consider replacing this connection with. It may be None.
-        :return: The connection to replace the prior connection given this connection.
-        If there is no prior connection, or it does not involve the same swatches, this connection is given.
-        If the prior connection subsumes this connection, None is returned as no updated connection is needed.
-        If the prior connection overlaps this connection, a merged interval connection is given to replace both.
-        Otherwise, if the two connections to do not touch, this connection is given to replace the prior connection.
         """
         if prior_connection is None:
             return self

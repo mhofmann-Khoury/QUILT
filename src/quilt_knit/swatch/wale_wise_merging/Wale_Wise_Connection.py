@@ -15,7 +15,18 @@ class Wale_Wise_Connection(Swatch_Connection):
 
     def __init__(self, bottom_swatch: Swatch, top_swatch: Swatch,
                  bottom_leftmost_needle_position: int = 0, bottom_rightmost_needle_position: int | None = None,
-                 top_leftmost_needle_position: int = 0, top_rightmost_needle_position: int | None = None, remove_cast_ons: bool = True):
+                 top_leftmost_needle_position: int = 0, top_rightmost_needle_position: int | None = None,
+                 remove_cast_ons: bool = True):
+        """
+        Args:
+            bottom_swatch (Swatch): The bottom swatch in the connection.
+            top_swatch (Swatch): The top swatch in the connection.
+            bottom_leftmost_needle_position (int, optional): The leftmost needle position to merge from the bottom swatch. Defaults to 0.
+            bottom_rightmost_needle_position (int, optional): The rightmost needle position to merge from the bottom swatch. Defaults to the width of the bottom swatch.
+            top_leftmost_needle_position (int, optional): The leftmost needle position to merge into the top swatch. Defaults to 0.
+            top_rightmost_needle_position (int, optional): The rightmost needle position to merge into the top swatch. Defaults to the width of the top swatch.
+            remove_cast_ons (bool, optional): Whether to remove cast-on operations from the top swatch before merging. Defaults to True.
+        """
         if bottom_rightmost_needle_position is None:
             bottom_rightmost_needle_position = bottom_swatch.width - 1
         if top_rightmost_needle_position is None:

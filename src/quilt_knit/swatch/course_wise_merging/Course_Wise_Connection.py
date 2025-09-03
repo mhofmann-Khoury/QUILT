@@ -21,6 +21,15 @@ class Course_Wise_Connection(Swatch_Connection):
     def __init__(self, left_swatch: Swatch, right_swatch: Swatch,
                  first_carriage_pass_on_left: int = 0, last_carriage_pass_on_left: int | None = None,
                  first_carriage_pass_on_right: int = 0, last_carriage_pass_on_right: int | None = None):
+        """
+        Args:
+            left_swatch (Swatch): The left swatch in the connection.
+            right_swatch (Swatch): The right swatch in the connection.
+            first_carriage_pass_on_left (int, optional): The first carriage pass to merge from on the left side. Defaults to 0.
+            last_carriage_pass_on_left (int, optional): The last carriage pass to merge from on the left side. Defaults to the height of the left swatch.
+            first_carriage_pass_on_right (int, optional): The first carriage pass to merge from on the right side. Defaults to 0.
+            last_carriage_pass_on_right (int, optional): The last carriage pass to merge from on the right side. Defaults to the height of the right swatch.
+        """
         if last_carriage_pass_on_left is None:
             last_carriage_pass_on_left = left_swatch.height
         if last_carriage_pass_on_right is None:
@@ -101,41 +110,50 @@ class Course_Wise_Connection(Swatch_Connection):
         """
         return self.right_top_course >= self.right_swatch.height
 
-    def swap_from_swatch(self, new_swatch: Swatch, interval_shift: int | dict[int, int] = 0) -> Course_Wise_Connection:
+    def swap_from_swatch_by_carriage_pass_alignment(self, new_swatch: Swatch, interval_shift: dict[int, int]) -> Course_Wise_Connection:
         """
         Args:
             new_swatch (Swatch): The new from swatch in the resulting swatch connection. This will be the new left swatch.
-            interval_shift (int | dict[int, int]):
-                The amount to shift the interval by when swapping the from_swatch. Defaults to 0.
-                If this is a dictionary, the keys are carriage pass indices in the current swatch which map to new indices in the new swatch.
+            interval_shift (dict[int, int]): A dictionary that maps carriage pass indices in the current swatch to new indices in the merged swatch.
 
         Returns:
             Course_Wise_Connection: The connection formed by swapping the left swatch with the given new swatch and adjusting the interval by the given specification.
         """
-        if isinstance(interval_shift, int):
-            return cast(Course_Wise_Connection, super().swap_from_swatch(new_swatch, interval_shift))
-        else:  # Source the new interval on the left/from side from the given dictionary
-            return Course_Wise_Connection(new_swatch, self.right_swatch,
-                                          first_carriage_pass_on_left=interval_shift[self.left_bottom_course], last_carriage_pass_on_left=interval_shift[self.left_top_course],
-                                          first_carriage_pass_on_right=self.right_bottom_course, last_carriage_pass_on_right=self.right_top_course)
+        return Course_Wise_Connection(new_swatch, self.right_swatch,
+                                      first_carriage_pass_on_left=interval_shift[self.left_bottom_course], last_carriage_pass_on_left=interval_shift[self.left_top_course],
+                                      first_carriage_pass_on_right=self.right_bottom_course, last_carriage_pass_on_right=self.right_top_course)
 
-    def swap_to_swatch(self, new_swatch: Swatch, interval_shift: int | dict[int, int] = 0) -> Course_Wise_Connection:
+    def swap_to_swatch_by_carriage_pass_alignment(self, new_swatch: Swatch, interval_shift: dict[int, int]) -> Course_Wise_Connection:
         """
         Args:
             new_swatch (Swatch): The new to swatch in the resulting swatch connection. This will be the new right swatch.
-            interval_shift (int | dict[int, int]):
-                The amount to shift the interval by when swapping the right swatch. Defaults to 0.
-                If this is a dictionary, the keys are carriage pass indices in the current swatch which map to new indices in the new swatch.
+            interval_shift (dict[int, int]): A dictionary that maps carriage pass indices in the current swatch to new indices in the merged swatch.
 
         Returns:
             Course_Wise_Connection: The connection formed by swapping the right swatch with the given new swatch and adjusting the interval by the given specification.
         """
-        if isinstance(interval_shift, int):
-            return cast(Course_Wise_Connection, super().swap_to_swatch(new_swatch, interval_shift))
-        else:  # Source the new interval on the left/from side from the given dictionary
-            return Course_Wise_Connection(new_swatch, self.right_swatch,
-                                          first_carriage_pass_on_left=self.left_bottom_course, last_carriage_pass_on_left=self.left_top_course,
-                                          first_carriage_pass_on_right=interval_shift[self.right_bottom_course], last_carriage_pass_on_right=interval_shift[self.right_top_course])
+        return Course_Wise_Connection(new_swatch, self.right_swatch,
+                                      first_carriage_pass_on_left=self.left_bottom_course, last_carriage_pass_on_left=self.left_top_course,
+                                      first_carriage_pass_on_right=interval_shift[self.right_bottom_course], last_carriage_pass_on_right=interval_shift[self.right_top_course])
+
+    def swap_matching_swatch_by_carriage_pass_alignment(self, new_swatch: Swatch, matching_swatch: Swatch, interval_shift: dict[int, int]) -> Course_Wise_Connection:
+        """
+        Args:
+            new_swatch (Swatch): The new swatch to swap into the place of the matching swatch.
+            matching_swatch (Swatch): The matching swatch to swap out of the connection.
+            interval_shift (dict[int, int]): A dictionary that maps carriage pass indices in the current swatch to new indices in the merged swatch.
+
+        Returns:
+            Swatch_Connection:
+                The swatch connection formed by swapping the new swatch into place of the matched swatch and shifting it by the given interval.
+                If this connection does not contain the matching swatch, this connection is returned unchanged.
+        """
+        if self.from_swatch is matching_swatch:
+            return self.swap_from_swatch_by_carriage_pass_alignment(new_swatch, interval_shift)
+        elif self.to_swatch is matching_swatch:
+            return self.swap_to_swatch_by_carriage_pass_alignment(new_swatch, interval_shift)
+        else:
+            return self
 
     @property
     def left_swatch(self) -> Swatch:

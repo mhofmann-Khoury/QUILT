@@ -76,7 +76,36 @@ class Course_Merge_Process:
         self._set_merge_direction()
         self.merged_program_machine_state: Knitting_Machine = Knitting_Machine()
         self.source_machine_states: dict[Course_Side, Knitting_Machine] = {Course_Side.Left: Knitting_Machine(), Course_Side.Right: Knitting_Machine()}
-        self.merged_instructions: list[tuple[Knitout_Line, Course_Side]] = [(i, self.current_swatch_side) for i in get_machine_header(self.current_swatch.execution_knitting_machine)]
+        self.merged_instructions: list[Knitout_Line] = [i for i in get_machine_header(self.current_swatch.execution_knitting_machine)]
+        self._merged_instructions_to_source: dict[Knitout_Line, tuple[Course_Side, Knitout_Line] | None] = {i: None for i in self.merged_instructions}
+
+    def get_original_cp_index(self, carriage_pass: Carriage_Pass) -> tuple[None | int, None | int]:
+        """
+        Args:
+            carriage_pass (Carriage_Pass): A carriage pass in the swatch resulting from this merge.
+
+        Returns:
+            tuple[None | int, None | int]:
+                A tuple containing the carriage pass indices in the original left and right swatches that created this carriage pass.
+                These indices are None if the carriage pass does not contain instructions from a given side.
+
+        Raises
+            KeyError: If the carriage pass does not belong to the merged swatch.
+        """
+        left_index = None
+        right_index = None
+        for instruction in carriage_pass:
+            if instruction not in self._merged_instructions_to_source:
+                raise KeyError(f"Instruction {instruction} not found in merged swatch")
+            source = self._merged_instructions_to_source[instruction]
+            if source is not None:
+                if left_index is None and source[0] is Course_Side.Left:
+                    left_index = self.left_swatch.get_cp_index_of_instruction(source[1])
+                elif right_index is None and source[0] is Course_Side.Right:
+                    right_index = self.right_swatch.get_cp_index_of_instruction(source[1])
+            if left_index is not None and right_index is not None:
+                break
+        return left_index, right_index
 
     @property
     def starting_course_aligned(self) -> bool:
@@ -548,6 +577,7 @@ class Course_Merge_Process:
     def _add_instruction_to_merge(self, merge_instruction: Knitout_Line, instruction_source: Course_Side, instruction: Knitout_Line | None = None) -> bool:
         """
         Adds the given merge instruction to the merged instruction program and updates the corresponding machine states.
+
         Args:
             merge_instruction (Knitout_Line): The instruction to add to the merged program.
             instruction_source (Course_Side): Specifies the source swatch of the merged instruction.
@@ -569,7 +599,8 @@ class Course_Merge_Process:
             updates_merge = merge_instruction.execute(self.merged_program_machine_state)
             if not updates_merge:
                 return False  # No update to the merged machine state, so this isn't added to the merged program.
-        self.merged_instructions.append((merge_instruction, instruction_source))
+        self.merged_instructions.append(merge_instruction)
+        self._merged_instructions_to_source[merge_instruction] = (instruction_source, instruction)
         return True
 
     def _release_to_merge_instruction(self, instruction: Knitout_Line, instruction_source: Course_Side) -> None:
@@ -778,7 +809,7 @@ class Course_Merge_Process:
         """
         Args:
             boundary_instruction (Course_Boundary_Instruction): The boundary instruction to find connections from.
-            excluded_boundaries (set[Course_Boundary_Instruction], optional: The set of boundary instructions to exclude from the available connections. Defaults to the empty set.
+            excluded_boundaries (set[Course_Boundary_Instruction], optional): The set of boundary instructions to exclude from the available connections. Defaults to the empty set.
             max_cp_jumps (int, optional): The maximum number carriage passes allowed to be jumped to form a connection. Defaults to 4.
 
         Returns:
@@ -1121,18 +1152,18 @@ class Course_Merge_Process:
             self._release_to_merge_instruction(outhook, self.current_swatch_side)
             self._add_instruction_to_merge(outhook, self.current_swatch_side)
         self._specify_sources_in_merged_instructions()
-        return [instruction for instruction, _source in self.merged_instructions]
+        return self.merged_instructions
 
     def _specify_sources_in_merged_instructions(self) -> None:
         """
         Updates the line numbers and comments of the instructions in the merged program. Instructions copied from a swatch will include source information in the comment.
         """
-        for line_number, instruction_info in enumerate(self.merged_instructions):
-            instruction = instruction_info[0]
-            if instruction.original_line_number is not None:
+        for line_number, instruction in enumerate(self.merged_instructions):
+            source = self._merged_instructions_to_source[instruction]
+            if source is not None:
                 if instruction.comment is None:
                     instruction.comment = ""
-                instruction.comment += f" from line {instruction.original_line_number} of {instruction_info[1]} swatch"
+                instruction.comment += f" from line {instruction.original_line_number} of {source[0]} swatch"
             instruction.original_line_number = line_number
 
     def _current_swatch_consumed(self) -> bool:
@@ -1153,7 +1184,7 @@ class Course_Merge_Process:
         if merge_name is None:
             merge_name = f"cwm_{self.left_swatch.name}_to_{self.right_swatch.name}"
         with open(f'{merge_name}.k', 'w') as merge_file:
-            clean_merged_instructions = [f"{str(instruction).splitlines()[0]}\n" for instruction, _side in self.merged_instructions]
+            clean_merged_instructions = [f"{str(instruction).splitlines()[0]}\n" for instruction in self.merged_instructions]
             merge_file.writelines(clean_merged_instructions)
 
     def compile_to_dat(self, merge_name: str | None = None) -> None:
@@ -1164,6 +1195,6 @@ class Course_Merge_Process:
             merge_name (str, optional): The name of the merged swatch knitout file. Defaults to cwm_<the left_swatch's name>_to_<the right_swatch's name>.
         """
         if merge_name is None:
-            merge_name = f"cwm_{self.left_swatch.name}_to_{self.right_swatch.name}"
+            merge_name = f"{self.left_swatch.name}_cm_{self.right_swatch.name}"
         self.write_knitout(merge_name)
         knitout_to_dat(f"{merge_name}.k", f"{merge_name}.dat")
