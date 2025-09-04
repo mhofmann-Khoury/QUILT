@@ -335,7 +335,7 @@ class Swatch_Connection:
         Returns:
             Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
         """
-        return self.__class__(new_swatch, self.to_swatch, self.from_begin, self.from_end, self.to_begin + interval_shift, self.to_end + interval_shift)
+        return self.__class__(self.from_swatch, new_swatch, self.from_begin, self.from_end, self.to_begin + interval_shift, self.to_end + interval_shift)
 
     def get_shifted_connection(self, from_shift: int = 0, to_shift: int = 0) -> Swatch_Connection:
         """

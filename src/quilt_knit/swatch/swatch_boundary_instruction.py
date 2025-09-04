@@ -19,8 +19,6 @@ from virtual_knitting_machine.machine_components.yarn_management.Yarn_Carrier_Se
 @dataclass(unsafe_hash=True)
 class Swatch_Boundary_Instruction:
     """A class to represent instructions on the boundary of a swatch program."""
-    is_entrance: bool  # If this boundary instruction allows entrance to the swatch program.
-    is_exit: bool  # If this boundary instructions allows an exit from the swatch program.
     instruction: Needle_Instruction  # The instruction associated with this boundary instruction.
     source_swatch_name: str  # The name of the swatch that this boundary instruction is sourced form.
 

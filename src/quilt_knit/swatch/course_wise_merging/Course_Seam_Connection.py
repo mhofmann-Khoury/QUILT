@@ -3,14 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from virtual_knitting_machine.machine_components.yarn_management.Yarn_Carrier_Set import (
-    Yarn_Carrier_Set,
-)
+from knitout_interpreter.knitout_operations.needle_instructions import Xfer_Instruction
 
-from quilt_knit.swatch.course_boundary_instructions import (
-    Course_Boundary_Instruction,
-    Course_Side,
-)
+from quilt_knit.swatch.course_boundary_instructions import Course_Boundary_Instruction
 
 
 @dataclass
@@ -18,6 +13,54 @@ class Course_Seam_Connection:
     """ A Class representing the effects of connecting an exit and entrance instruction between two swatches."""
     exit_instruction: Course_Boundary_Instruction = field(compare=False)  # The exit instruction connecting the swatches course-wise
     entrance_instruction: Course_Boundary_Instruction = field(compare=False)  # The entrance instruction connecting the swatches course-wise.
+
+    @property
+    def left_instruction(self) -> Course_Boundary_Instruction:
+        """
+        Returns:
+            Course_Boundary_Instruction: The instruction on the left swatch of the seam connection.
+        """
+        if self.exit_instruction.is_right_exit:  # exits the right side of the left swatch
+            return self.exit_instruction
+        else:
+            assert self.entrance_instruction.is_right_entrance  # enters the right side fo the left swatch
+            return self.entrance_instruction
+
+    @property
+    def right_instruction(self) -> Course_Boundary_Instruction:
+        """
+        Returns:
+            Course_Boundary_Instruction: The instruction on the right swatch of the seam connection.
+        """
+        if self.exit_instruction.is_left_exit:  # exits the left side of the right swatch
+            return self.exit_instruction
+        else:
+            assert self.entrance_instruction.is_left_entrance  # enters the left side of the right swatch
+            return self.entrance_instruction
+
+    @property
+    def leftward_connection(self) -> bool:
+        """
+        Returns:
+            bool: True if the connection moves from the right to left swatch, False otherwise.
+        """
+        return self.entrance_instruction.is_left_entrance and self.exit_instruction.is_right_exit
+
+    @property
+    def rightward_connection(self) -> bool:
+        """
+        Returns:
+            bool: True if the connection moves from the left to right swatch, False otherwise.
+        """
+        return self.exit_instruction.is_left_exit and self.entrance_instruction.is_right_entrance
+
+    @property
+    def xfer_connection(self) -> bool:
+        """
+        Returns:
+            bool: True if this is a connection between transfer carriage passes. False otherwise.
+        """
+        return isinstance(self.exit_instruction.instruction, Xfer_Instruction)
 
     def __eq__(self, other: Course_Seam_Connection) -> bool:
         """
@@ -131,16 +174,3 @@ class Course_Seam_Connection:
             bool: True if the given item is one of the boundary instructions involved in the connection. False, otherwise.
         """
         return item == self.exit_instruction or item == self.entrance_instruction
-
-    def __getitem__(self, item: Course_Side) -> Course_Boundary_Instruction:
-        """
-        Args:
-            item (Course_Side): The course side that references the desired boundary instruction
-
-        Returns:
-            Course_Boundary_Instruction: The boundary instruction that matches the given course side.
-        """
-        if self.exit_instruction.course_side == item:
-            return self.exit_instruction
-        else:
-            return self.entrance_instruction

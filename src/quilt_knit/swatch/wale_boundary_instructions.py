@@ -71,6 +71,8 @@ class Wale_Side(Enum):
 @dataclass(unsafe_hash=True)
 class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
     """ A class that represent instructions that process loops on the wale-wise boundary of a swatch program"""
+    is_entrance: bool  # If this boundary instruction allows entrance to the swatch program.
+    is_exit: bool  # If this boundary instructions allows an exit from the swatch program.
     _connections_made: int = field(default=0, compare=False, hash=False)
 
     @property
@@ -192,7 +194,7 @@ class Wale_Boundary_Instruction(Swatch_Boundary_Instruction):
                 return True
             else:
                 return False
-        else: # Split front and back bed
+        else:  # Split front and back bed
             return True
 
     @property

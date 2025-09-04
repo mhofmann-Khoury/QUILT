@@ -635,11 +635,8 @@ class Quilt:
         Returns:
             set[Swatch]: The set of swatches remaining in the quilt after the merge is complete.
         """
-        bands, disjoint_bottom_slices = self.convert_quilt_to_course_bands()
+        bands = self.convert_quilt_to_course_bands()
         if compile_bands:
-            for swatch in disjoint_bottom_slices:
-                swatch.compile_to_knitout()
-                swatch.compile_to_dat()
             for band in bands:
                 for swatch in band:
                     swatch.compile_to_knitout()

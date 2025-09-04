@@ -74,26 +74,26 @@ class TestCourse_Merge_Process(TestCase):
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('lace_merge')
-        self.assertEqual(len(merger.merged_instructions), 106)
+        self.assertEqual(len(merger.merged_instructions), 100)
 
         connection = self._make_connection('left_lace', 'right_lace', c=1, width=7, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('lace_dirs_merge')
-        self.assertEqual(len(merger.merged_instructions), 100)
+        self.assertEqual(len(merger.merged_instructions), 102)
 
     def test_merge_cable(self):
         connection = self._make_connection('cable', 'cable', c=1, width=7, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('cable_merge')
-        self.assertEqual(len(merger.merged_instructions), 138)
+        self.assertEqual(len(merger.merged_instructions), 120)
 
         connection = self._make_connection('left_cable', 'right_cable', c=1, width=7, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('cable_dirs_merge')
-        self.assertEqual(len(merger.merged_instructions), 126)
+        self.assertEqual(len(merger.merged_instructions), 118)
 
     def test_merge_rib_jersey(self):
         connection = self._make_connection('jersey', 'rib', c=1, width=4, height=2)
@@ -126,39 +126,39 @@ class TestCourse_Merge_Process(TestCase):
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jersey_lace')
-        self.assertEqual(len(merger.merged_instructions), 52)
+        self.assertEqual(len(merger.merged_instructions), 51)
 
         connection = self._make_connection('lace', 'jersey', c=1, width=6, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('lace_jersey')
-        self.assertEqual(len(merger.merged_instructions), 84)
+        self.assertEqual(len(merger.merged_instructions), 82)
 
     def test_merge_jersey_cable(self):
         connection = self._make_connection('jersey', 'cable', c=1, width=6, height=2)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jersey_cable')
-        self.assertEqual(len(merger.merged_instructions), 60)
+        self.assertEqual(len(merger.merged_instructions), 57)
 
         connection = self._make_connection('cable', 'jersey', c=1, width=6, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('cable_jersey')
-        self.assertEqual(len(merger.merged_instructions), 100)
+        self.assertEqual(len(merger.merged_instructions), 94)
 
     def test_merge_lace_cable(self):
         connection = self._make_connection('lace', 'cable', c=1, width=7, height=2)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('lace_cable')
-        self.assertEqual(len(merger.merged_instructions), 72)
+        self.assertEqual(len(merger.merged_instructions), 67)
 
         connection = self._make_connection('cable', 'lace', c=1, width=7, height=4)
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('cable_lace')
-        self.assertEqual(len(merger.merged_instructions), 123)
+        self.assertEqual(len(merger.merged_instructions), 114)
 
     def test_merge_jacquard(self):
         connection = self._make_connection('jacquard', 'jacquard', white=1, black=2, width=4, height=2)

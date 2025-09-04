@@ -47,7 +47,7 @@ from virtual_knitting_machine.machine_constructed_knit_graph.Machine_Knit_Loop i
 
 from quilt_knit.swatch.course_boundary_instructions import (
     Course_Boundary_Instruction,
-    Course_Side,
+    Course_Boundary_Type,
 )
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
 
@@ -95,7 +95,7 @@ class Swatch:
             for instruction in cp:
                 self._instruction_to_carriage_pass[instruction] = cp
         self._process_course_boundaries()
-        self._terminal_wales: dict[Loop, list[Wale]] = get_terminal_wales(self.execution_knit_graph) # Todo update knitgraph to handle this
+        self._terminal_wales: dict[Loop, list[Wale]] = get_terminal_wales(self.execution_knit_graph)  # Todo update knitgraph to handle this
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
         self.instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
@@ -118,28 +118,54 @@ class Swatch:
         """
         for carriage_pass, cp_index in self._carriage_pass_to_index.items():
             blocked_pass = len(carriage_pass) > 1  # True if the carriage pass has multiple operations blocking it from one side or the other.
-            if carriage_pass.direction is None or carriage_pass.direction is Carriage_Pass_Direction.Rightward:
-                # Transfer passes are presumed to move in rightward direction by increasing sorted needles.
-                left_is_entrance = True
-                left_is_exit = not blocked_pass
-                right_is_entrance = not blocked_pass
-                right_is_exit = True
+            if not blocked_pass:  # Only one xfer instruction, so it can merge from either direction
+                if carriage_pass.xfer_pass:
+                    self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.first_instruction, source_swatch_name=self.name,
+                                                                               left_boundary_type=Course_Boundary_Type.entrance_exit, right_boundary_type=Course_Boundary_Type.entrance_exit,
+                                                                               carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                               carriage_pass_index=cp_index))
+                elif carriage_pass.direction is Carriage_Pass_Direction.Rightward:
+                    self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.first_instruction, source_swatch_name=self.name,
+                                                                               left_boundary_type=Course_Boundary_Type.entrance, right_boundary_type=Course_Boundary_Type.exit_boundary,
+                                                                               carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                               carriage_pass_index=cp_index))
+                else:
+                    assert carriage_pass.direction is Carriage_Pass_Direction.Leftward
+                    self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.first_instruction, source_swatch_name=self.name,
+                                                                               left_boundary_type=Course_Boundary_Type.exit_boundary, right_boundary_type=Course_Boundary_Type.entrance,
+                                                                               carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                               carriage_pass_index=cp_index))
+
+            elif carriage_pass.xfer_pass:
                 left_instruction = carriage_pass.first_instruction
                 right_instruction = carriage_pass.last_instruction
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=left_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.entrance_exit, right_boundary_type=Course_Boundary_Type.blocked,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=right_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.blocked, right_boundary_type=Course_Boundary_Type.entrance_exit,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
+            elif carriage_pass.direction is Carriage_Pass_Direction.Rightward:
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.first_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.entrance, right_boundary_type=Course_Boundary_Type.blocked,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.last_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.blocked, right_boundary_type=Course_Boundary_Type.exit_boundary,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
             else:
                 assert carriage_pass.direction is Carriage_Pass_Direction.Leftward
-                left_is_entrance = not blocked_pass
-                left_is_exit = True
-                right_is_entrance = True
-                right_is_exit = not blocked_pass
-                left_instruction = carriage_pass.last_instruction
-                right_instruction = carriage_pass.first_instruction
-            left_boundary = Course_Boundary_Instruction(is_entrance=left_is_entrance, is_exit=left_is_exit, instruction=left_instruction, source_swatch_name=self.name,
-                                                        course_side=Course_Side.Left, carriage_pass_index=cp_index, blocked_on_left=False, blocked_on_right=blocked_pass)
-            right_boundary = Course_Boundary_Instruction(is_entrance=right_is_entrance, is_exit=right_is_exit, instruction=right_instruction, source_swatch_name=self.name,
-                                                         course_side=Course_Side.Right, carriage_pass_index=cp_index, blocked_on_left=blocked_pass, blocked_on_right=False)
-            self._add_boundary_instruction(left_boundary)
-            self._add_boundary_instruction(right_boundary)
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.first_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.blocked, right_boundary_type=Course_Boundary_Type.entrance,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
+                self._add_boundary_instruction(Course_Boundary_Instruction(instruction=carriage_pass.last_instruction, source_swatch_name=self.name,
+                                                                           left_boundary_type=Course_Boundary_Type.exit_boundary, right_boundary_type=Course_Boundary_Type.blocked,
+                                                                           carriage_pass_rack=carriage_pass.rack, carriage_pass_is_all_needle=carriage_pass.all_needle_rack,
+                                                                           carriage_pass_index=cp_index))
 
     def _execute_knitout(self, prior_machine_state: Knitting_Machine) -> None:
         """
@@ -267,18 +293,16 @@ class Swatch:
         """
         return self.carriage_passes[index]
 
-    def _add_boundary_instruction(self, bi: Course_Boundary_Instruction, cp: Carriage_Pass | None = None) -> None:
+    def _add_boundary_instruction(self, boundary_instruction: Course_Boundary_Instruction) -> None:
         """
         Adds the given course boundary instruction belonging to the given carriage pass.
 
         Args:
-            bi (Course_Boundary_Instruction): The course boundary instruction to add.
-            cp (Carriage_Pass, optional): The carriage pass that the boundary instruction belongs to. Defaults to the carriage pass that owns the instruction.
+            boundary_instruction (Course_Boundary_Instruction): The course boundary instruction to add.
         """
-        if cp is None:  # TODO: Can the carriage pass always be inferred by the cp that owns this instruction?
-            cp = self.get_instruction_pass(bi.instruction)
-        self.course_boundary_instructions[bi] = cp
-        self.instructions_on_course_boundary[bi.instruction] = bi
+        cp = self.get_instruction_pass(boundary_instruction.instruction)
+        self.course_boundary_instructions[boundary_instruction] = cp
+        self.instructions_on_course_boundary[boundary_instruction.instruction] = boundary_instruction
 
     @property
     def execution_knitting_machine(self) -> Knitting_Machine:
@@ -387,15 +411,25 @@ class Swatch:
         """
         return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_top
 
-    def instruction_is_course_exit(self, instruction: Knitout_Line) -> bool:
+    def instruction_is_left_exit(self, instruction: Knitout_Line) -> bool:
         """
         Args:
             instruction (Knitout_Line): The instruction owned by a boundary instruction.
 
         Returns:
-            bool: True if the instruction is an exit to a course boundary. False, otherwise.
+            bool: True if the instruction is an exit to the left boundary. False, otherwise.
         """
-        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_exit
+        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_left_exit
+
+    def instruction_is_left_entrance(self, instruction: Knitout_Line) -> bool:
+        """
+        Args:
+            instruction (Knitout_Line): The instruction owned by a boundary instruction.
+
+        Returns:
+            bool: True if the instruction is an entrance to the left boundary. False, otherwise.
+        """
+        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_left_entrance
 
     def instruction_on_wale_exit(self, instruction: Knitout_Line) -> bool:
         """
@@ -407,15 +441,25 @@ class Swatch:
         """
         return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_exit
 
-    def instruction_is_course_entrance(self, instruction: Knitout_Line) -> bool:
+    def instruction_is_right_exit(self, instruction: Knitout_Line) -> bool:
         """
         Args:
             instruction (Knitout_Line): The instruction owned by a boundary instruction.
 
         Returns:
-            bool: True if the instruction is an entrance to a course boundary. False, otherwise.
+            bool: True if the instruction is an exit from the right boundary. False, otherwise.
         """
-        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_entrance
+        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_right_exit
+
+    def instruction_is_right_entrance(self, instruction: Knitout_Line) -> bool:
+        """
+        Args:
+            instruction (Knitout_Line): The instruction owned by a boundary instruction.
+
+        Returns:
+            bool: True if the instruction is an entrance to the right boundary. False, otherwise.
+        """
+        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_right_entrance
 
     def instruction_is_wale_entrance(self, instruction: Knitout_Line) -> bool:
         """
@@ -482,7 +526,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary entrances of the left side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_left and b.is_entrance]
+        return [b for b in self.course_boundary_instructions if b.is_left_entrance]
 
     @property
     def left_exits(self) -> list[Course_Boundary_Instruction]:
@@ -490,7 +534,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary exits of the left side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_left and b.is_exit]
+        return [b for b in self.course_boundary_instructions if b.is_left_exit]
 
     @property
     def left_boundary(self) -> list[Course_Boundary_Instruction]:
@@ -506,7 +550,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary entrances of the right side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_right and b.is_entrance]
+        return [b for b in self.course_boundary_instructions if b.is_right_entrance]
 
     @property
     def right_exits(self) -> list[Course_Boundary_Instruction]:
@@ -514,7 +558,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary exits of the right side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_right and b.is_exit]
+        return [b for b in self.course_boundary_instructions if b.is_right_exit]
 
     @property
     def right_boundary(self) -> list[Course_Boundary_Instruction]:
@@ -704,10 +748,9 @@ class Swatch:
         # If we didn't reach the requested course_pass_count, return height of this swatch.
         return self.height
 
-    def remove_cast_on_boundary(self) -> Swatch:
+    def remove_cast_on_boundary(self) -> None:
         """
-        Returns:
-            Swatch: A swatch of the same name as this swatch that has the tucks at the bottom of all wales removed.
+        Re-initializes this swatch without the tuck operations at the bottom of each wale.
         """
         new_knitout = []
         knit_needles = set()
@@ -726,4 +769,4 @@ class Swatch:
                 new_knitout.append(knitout_line)
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
-            return Swatch(self.name, new_knitout)
+            self.__init__(self.name, new_knitout)

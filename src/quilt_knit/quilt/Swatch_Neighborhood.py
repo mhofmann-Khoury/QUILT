@@ -53,9 +53,11 @@ class Swatch_Neighborhood:
             upper_course = self.swatch.height
         lower_course = max(lower_course, 0)
         upper_course = min(upper_course, self.swatch.height)
-        if lower_course > upper_course:
-            return set()
         connections: set[Swatch_Connection] = set()
+        if not exclude_top_connections and upper_course >= (self.swatch.height-1): # Do this before skipping out on mismatch lower and upper courses
+            connections.update(i.data for i in self.intervals_above.interval_tree)
+        if lower_course > upper_course:
+            return connections
         if not exclude_left_connection:
             left_intervals = self.intervals_to_left.interval_tree[lower_course:upper_course]
             connections.update(i.data for i in left_intervals)
@@ -64,8 +66,6 @@ class Swatch_Neighborhood:
             connections.update(i.data for i in right_intervals)
         if not exclude_bottom_connections and lower_course == 0:
             connections.update(i.data for i in self.intervals_below.interval_tree)
-        if not exclude_top_connections and upper_course >= (self.swatch.height-1):
-            connections.update(i.data for i in self.intervals_above.interval_tree)
         return connections
 
     def get_interval_tree(self, connection: Swatch_Connection) -> Connection_Interval_Tree:
