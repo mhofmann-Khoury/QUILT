@@ -10,9 +10,10 @@ from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_D
 )
 
 from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instruction
+from quilt_knit.Swatch_Side import Swatch_Side
 
 
-class Course_Side(Enum):
+class Course_Side(Swatch_Side, Enum):
     """Enumeration of the side of a swatch an instruction exists on. Used to differentiate between entrance-exit seam directions."""
 
     Left = "Left"  # Indicates that an instruction is on the left side of the swatch
@@ -59,13 +60,6 @@ class Course_Side(Enum):
             (str): The name of this course side.
         """
         return str(self)
-
-    def __hash__(self) -> int:
-        """
-        Returns:
-            int: The hash value of the name of this Course_Side
-        """
-        return hash(self.name)
 
     @property
     def opposite(self) -> Course_Side:

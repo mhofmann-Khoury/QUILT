@@ -14,9 +14,10 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
 from virtual_knitting_machine.machine_components.needles.Needle import Needle
 
 from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instruction
+from quilt_knit.Swatch_Side import Swatch_Side
 
 
-class Wale_Side(Enum):
+class Wale_Side(Swatch_Side, Enum):
     """Enumeration of the wale-wise side of a swatch an instruction exists on. Used to differentiate between entrance-exit seam directions."""
     Top = "Top"  # Indicates that an instruction is on the top boundary of a swatch
     Bottom = "Bottom"  # Indicates that an instruction is on the bottom boundary of a swatch
@@ -34,13 +35,6 @@ class Wale_Side(Enum):
             (str): The name of this wale side.
         """
         return str(self)
-
-    def __hash__(self) -> int:
-        """
-        Returns:
-            int: The hash value of the name of this wale side
-        """
-        return hash(self.name)
 
     @property
     def opposite(self) -> Wale_Side:

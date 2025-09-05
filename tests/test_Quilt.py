@@ -75,3 +75,11 @@ class TestQuilt(TestCase):
             swatch.compile_to_dat('cable_merge')
             self.assertEqual(len(swatch.carriage_passes), 17)
             self.assertEqual(len(swatch.knitout_program), 126)
+
+    def test_jacquard_quad_quilt(self):
+        quilt = self._quad_quilt("jacquard", "jacquard", "jacquard", "jacquard", white=1, black=2, c=1, width=4, height=2)
+        # quilt.print_bottom_up_leftward_traversal()
+        swatches = quilt.merge_quilt()
+        self.assertEqual(len(swatches), 1)
+        for swatch in swatches:
+            swatch.compile_to_dat('jacquard_merge')

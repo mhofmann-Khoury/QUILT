@@ -1,8 +1,5 @@
 """Module containing the Course_Seam_Search_Space class."""
 
-from knitout_interpreter.knitout_operations.Knitout_Line import Knitout_Line
-from networkx import DiGraph
-
 from quilt_knit.swatch.course_boundary_instructions import Course_Boundary_Instruction
 from quilt_knit.swatch.course_wise_merging.Course_Seam_Connection import (
     Course_Seam_Connection,
@@ -10,38 +7,49 @@ from quilt_knit.swatch.course_wise_merging.Course_Seam_Connection import (
 from quilt_knit.swatch.course_wise_merging.Course_Wise_Connection import (
     Course_Wise_Connection,
 )
+from quilt_knit.swatch.Seam_Search_Space import Seam_Search_Space
 from quilt_knit.swatch.Swatch import Swatch
 
 
-class Course_Seam_Search_Space:
+class Course_Seam_Search_Space(Seam_Search_Space):
     """
         Network of potential linking instructions between swatches to form a vertical seam along the courses.
     """
 
     def __init__(self, left_swatch: Swatch, right_swatch: Swatch):
-        self.right_swatch: Swatch = right_swatch
-        self.left_swatch: Swatch = left_swatch
-        self.seam_network: DiGraph = DiGraph()
+        super().__init__(left_swatch, right_swatch)
         for left_exit in self.right_swatch.left_exits:
             for right_entrance in self.left_swatch.right_entrances:
                 if left_exit.has_potential_left_to_right_connection(right_entrance):
                     connection = Course_Seam_Connection(left_exit, right_entrance)
-                    self.seam_network.add_edge(left_exit, right_entrance, connection=connection)
+                    self._add_connection(connection)
         for right_exit in self.left_swatch.right_exits:
             for left_entrance in self.right_swatch.left_entrances:
                 if left_entrance.has_potential_left_to_right_connection(right_exit):
                     connection = Course_Seam_Connection(right_exit, left_entrance)
-                    self.seam_network.add_edge(right_exit, left_entrance, connection=connection)
-        self.instructions_to_boundary_instruction: dict[Knitout_Line, Course_Boundary_Instruction] = {}
+                    self._add_connection(connection)
         self.left_swatch_boundaries_by_course_index: dict[int, Course_Boundary_Instruction] = {}
         for boundary in self.left_swatch.right_boundary:
             self.left_swatch_boundaries_by_course_index[boundary.carriage_pass_index] = boundary
-            self.instructions_to_boundary_instruction[boundary.instruction] = boundary
         self.right_swatch_boundaries_by_course_index: dict[int, Course_Boundary_Instruction] = {}
         for boundary in self.right_swatch.left_boundary:
             self.right_swatch_boundaries_by_course_index[boundary.carriage_pass_index] = boundary
-            self.instructions_to_boundary_instruction[boundary.instruction] = boundary
-        self.preserved_search_space: DiGraph = self.seam_network.copy()  # used to reset the search space after merging.
+
+    @property
+    def left_swatch(self) -> Swatch:
+        """
+        Returns:
+            Swatch: The left swatch in the merge.
+        """
+        return self._from_swatch
+
+    @property
+    def right_swatch(self) -> Swatch:
+        """
+        Returns:
+            Swatch: The right swatch in the merge.
+        """
+        return self._to_swatch
 
     def print_search_space(self) -> None:
         """
@@ -84,36 +92,3 @@ class Course_Seam_Search_Space:
                 self.seam_network.remove_node(self.right_swatch_boundaries_by_course_index[i])
             for i in range(course_wise_connection.right_top_course, self.right_swatch.height):
                 self.seam_network.remove_node(self.right_swatch_boundaries_by_course_index[i])
-
-    def remove_boundary(self, instruction: Knitout_Line) -> None:
-        """
-        Removes any boundary instruction associated with the given instruction from the search space.
-        If the instruction does not belong to a boundary, nothing happens.
-
-        Args:
-            instruction (Knitout_Line): The boundary instruction to remove from the search space.
-        """
-        if instruction in self.instructions_to_boundary_instruction:
-            boundary = self.instructions_to_boundary_instruction[instruction]
-            if self.seam_network.has_node(boundary):
-                self.seam_network.remove_node(boundary)
-
-    def get_connection(self, exit_instruction: Course_Boundary_Instruction, entrance_instruction: Course_Boundary_Instruction) -> Course_Seam_Connection:
-        """
-
-        Args:
-            exit_instruction (Course_Boundary_Instruction): The exit instruction to find the connection of.
-            entrance_instruction (Course_Boundary_Instruction): The entrance instruction to find the connection of.
-
-        Returns:
-            Course_Seam_Connection : The connection from the exit to the entrance instruction in the search space.
-
-        Raises:
-            ValueError: If there is not a connection between the exit instruction and the entrance instruction in the search space.
-        """
-        if self.seam_network.has_edge(exit_instruction, entrance_instruction):
-            connection = self.seam_network.edges[exit_instruction, entrance_instruction]['connection']
-            assert isinstance(connection, Course_Seam_Connection)
-            return connection
-        else:
-            raise ValueError(f"No connection found from {exit_instruction} to {entrance_instruction}")

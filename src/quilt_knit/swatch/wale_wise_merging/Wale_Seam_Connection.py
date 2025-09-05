@@ -1,7 +1,6 @@
 """Module containing the Wale_Seam_Connection class."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import cast
 
 from knitout_interpreter.knitout_operations.knitout_instruction import (
@@ -15,14 +14,30 @@ from virtual_knitting_machine.machine_components.needles.Slider_Needle import (
     Slider_Needle,
 )
 
+from quilt_knit.swatch.Seam_Connection import Seam_Connection
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
 
 
-@dataclass
-class Wale_Seam_Connection:
+class Wale_Seam_Connection(Seam_Connection):
     """ A Class representing the effects of connecting an exit and entrance instruction between two swatches."""
-    exit_instruction: Wale_Boundary_Instruction = field(compare=False)  # The exit instruction connecting the swatches wale-wise
-    entrance_instruction: Wale_Boundary_Instruction = field(compare=False)  # The exit instruction connecting the swatches wale-wise
+
+    @property
+    def exit_instruction(self) -> Wale_Boundary_Instruction:
+        """
+        Returns:
+            Wale_Boundary_Instruction: The instruction that exits a wale boundary.
+        """
+        assert isinstance(self._exit_instruction, Wale_Boundary_Instruction)
+        return self._exit_instruction
+
+    @property
+    def entrance_instruction(self) -> Wale_Boundary_Instruction:
+        """
+        Returns:
+            Wale_Boundary_Instruction: The instruction that enters a wale boundary.
+        """
+        assert isinstance(self._entrance_instruction, Wale_Boundary_Instruction)
+        return self._entrance_instruction
 
     @property
     def can_satisfy_connection(self) -> bool:
@@ -177,14 +192,3 @@ class Wale_Seam_Connection:
             bool: True if this connection is strictly better than the other connection. A connection is better if it can form a connection in fewer operations.
         """
         return self.better_connection(other)
-
-    @staticmethod
-    def sort_connections(connections: list[Wale_Seam_Connection]) -> list[Wale_Seam_Connection]:
-        """
-        Args:
-            connections (list[Wale_Seam_Connection]): The list of connections to sort.
-
-        Returns:
-            List[Wale_Seam_Connection]: The sorted list of connections.
-        """
-        return sorted(connections)

@@ -1,18 +1,32 @@
 """Module containing the Course_Seam_Connection class."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from knitout_interpreter.knitout_operations.needle_instructions import Xfer_Instruction
 
 from quilt_knit.swatch.course_boundary_instructions import Course_Boundary_Instruction
+from quilt_knit.swatch.Seam_Connection import Seam_Connection
 
 
-@dataclass
-class Course_Seam_Connection:
+class Course_Seam_Connection(Seam_Connection):
     """ A Class representing the effects of connecting an exit and entrance instruction between two swatches."""
-    exit_instruction: Course_Boundary_Instruction = field(compare=False)  # The exit instruction connecting the swatches course-wise
-    entrance_instruction: Course_Boundary_Instruction = field(compare=False)  # The entrance instruction connecting the swatches course-wise.
+
+    @property
+    def exit_instruction(self) -> Course_Boundary_Instruction:
+        """
+        Returns:
+            Course_Boundary_Instruction: The instruction that exits a course boundary.
+        """
+        assert isinstance(self._exit_instruction, Course_Boundary_Instruction)
+        return self._exit_instruction
+
+    @property
+    def entrance_instruction(self) -> Course_Boundary_Instruction:
+        """
+        Returns:
+            Course_Boundary_Instruction: The instruction that enters a course boundary.
+        """
+        assert isinstance(self._entrance_instruction, Course_Boundary_Instruction)
+        return self._entrance_instruction
 
     @property
     def left_instruction(self) -> Course_Boundary_Instruction:
@@ -61,16 +75,6 @@ class Course_Seam_Connection:
             bool: True if this is a connection between transfer carriage passes. False otherwise.
         """
         return isinstance(self.exit_instruction.instruction, Xfer_Instruction)
-
-    def __eq__(self, other: Course_Seam_Connection) -> bool:
-        """
-        Args:
-            other (Course_Seam_Connection): The other connection to compare to.
-
-        Returns:
-            bool: True if both connections connect the same entrance-exit pairs.
-        """
-        return self.exit_instruction == other.exit_instruction and self.entrance_instruction == other.entrance_instruction
 
     def __str__(self) -> str:
         """
@@ -158,19 +162,13 @@ class Course_Seam_Connection:
         """
         return len(self.shared_carriers) < len(self.exit_carrier_ids)
 
-    def __hash__(self) -> int:
-        """
-        Returns:
-            int: Hash of the tuple of the exit and entrance instruction.
-        """
-        return hash((self.exit_instruction, self.entrance_instruction))
-
-    def __contains__(self, item: Course_Boundary_Instruction) -> bool:
+    def __lt__(self, other: Course_Seam_Connection) -> bool:
         """
         Args:
-            item (Course_Boundary_Instruction): The instruction to find in the connection.
+            other (Course_Seam_Connection): The other connection to compare with.
 
         Returns:
-            bool: True if the given item is one of the boundary instructions involved in the connection. False, otherwise.
+            bool: True if this connection has fewer different carriers between instructions that the other connection.
+
         """
-        return item == self.exit_instruction or item == self.entrance_instruction
+        return self.different_carriers < other.different_carriers
