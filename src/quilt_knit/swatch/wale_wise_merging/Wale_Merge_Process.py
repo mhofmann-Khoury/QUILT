@@ -188,9 +188,7 @@ class Wale_Merge_Process(Merge_Process):
                 break  # all carrier alignment is found
         assert len(carriers_to_align) == 0, f"Carriers to align are not complete: {carriers_to_align}"
         for carrier_to_cut in carriers_to_cut:
-            outhook = Outhook_Instruction(carrier_to_cut, "Cut to prevent long float after merge")
-            outhook.execute(self._merged_program_machine_state)
-            self.merged_instructions.append(outhook)
+            self._consume_instruction(Outhook_Instruction(carrier_to_cut, "Cut to prevent long float after merge"))
         return carriers_to_reverse, reverse_carrier_is_all_needle
 
     def _reset_knitting_direction_for_top_swatch(self, knit_to_align: bool = True, max_float: int = 4, max_reverse: int = 2) -> None:
@@ -386,10 +384,10 @@ class Wale_Merge_Process(Merge_Process):
         The resulting program is written to self.merged_instructions and the machine state of the merge program is updated as the merge is completed.
         """
         self._consume_bottom_swatch()
-        self.merged_instructions.append(Pre_Merge_Comment())
+        self._consume_instruction(Pre_Merge_Comment())
         alignment_transfers_by_racking, slider_transfers, exit_needles_need_bo = self._stratified_connections(maximum_stacked_connections=2)
         self._repair_unaligned_boundaries(exit_needles_need_bo)
         self._align_by_transfers(alignment_transfers_by_racking, slider_transfers)
         self._reset_knitting_direction_for_top_swatch()
-        self.merged_instructions.append(Post_Merge_Comment())
+        self._consume_instruction(Post_Merge_Comment())
         self._consume_top_swatch()

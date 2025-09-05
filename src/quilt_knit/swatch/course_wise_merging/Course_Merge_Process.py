@@ -580,6 +580,9 @@ class Course_Merge_Process(Merge_Process):
         if isinstance(next_instruction, Outhook_Instruction) and self._other_swatch_expects_carrier(next_instruction.carrier_id):
             self.increment_next_index()
             return
+        if isinstance(next_instruction, Inhook_Instruction):
+            self.increment_next_index()
+            return  # Skip inhooks form the original swatches. Only use the inhooks that are injected as needed.
         self._consume_instruction(self.next_instruction, self.current_course_merge_side, remove_connections, max_float)
         self.increment_next_index()
 

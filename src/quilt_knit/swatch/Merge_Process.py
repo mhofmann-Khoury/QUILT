@@ -4,6 +4,7 @@ from typing import cast
 
 from knitout_interpreter.knitout_execution import Knitout_Executer
 from knitout_interpreter.knitout_operations.carrier_instructions import (
+    Hook_Instruction,
     Inhook_Instruction,
     Outhook_Instruction,
     Releasehook_Instruction,
@@ -54,6 +55,13 @@ from quilt_knit.swatch.Swatch import Swatch
 from quilt_knit.swatch.Swatch_Connection import Swatch_Connection
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Side
 from quilt_knit.Swatch_Side import Swatch_Side
+
+
+class Failed_Merge_Release_Exception(Knitting_Machine_Exception):
+    """ Exception raised when a release required by the merge program cannot be executed."""
+
+    def __init__(self, release: Releasehook_Instruction):
+        super().__init__(f"Cannot execute required release {release} from current merge state.")
 
 
 class Merge_Process:
@@ -134,7 +142,7 @@ class Merge_Process:
         """
         if self._merged_program_machine_state.carrier_system.inserting_hook_available:
             return False
-        elif isinstance(next_instruction, Inhook_Instruction) or isinstance(next_instruction, Outhook_Instruction):
+        elif isinstance(next_instruction, Hook_Instruction):
             return True
         elif isinstance(next_instruction, Needle_Instruction) and next_instruction.has_second_needle:
             return True
@@ -149,7 +157,7 @@ class Merge_Process:
             instruction_source (Swatch_Side): Specifies the source swatch of the given instruction.
 
         Raises:
-            Knitting_Machine_Exception: If the release is required, but it is not allowed in the given program state.
+            Failed_Merge_Release_Exception: If the release is required, but it is not allowed in the given program state.
         """
         if self.instruction_requires_release(instruction):
             assert isinstance(self._merged_program_machine_state.carrier_system.hooked_carrier, Yarn_Carrier)
@@ -157,7 +165,7 @@ class Merge_Process:
             if self._execute_release(release):
                 self._add_instruction_to_merge(release, instruction_source)
             else:
-                raise Knitting_Machine_Exception(f"Cannot execute required release {release} from current merge state.")
+                raise Failed_Merge_Release_Exception(release)
 
     def _execute_release(self, release_instruction: Releasehook_Instruction) -> bool:
         if self._merged_program_machine_state.carrier_system.inserting_hook_available:
@@ -199,6 +207,13 @@ class Merge_Process:
             insert_float_yarn = Inhook_Instruction(missing_carrier, 'Bring in carrier from merge')
             self._release_to_merge_instruction(insert_float_yarn, instruction_source)
             self._add_instruction_to_merge(insert_float_yarn, instruction_source)
+        if instruction_source is not None:
+            source_machine = self._source_machine_states[instruction_source]
+            missing_carriers = source_machine.carrier_system[source_machine.carrier_system.missing_carriers(instruction.carrier_set.carrier_ids)]
+            if not isinstance(missing_carriers, list):
+                missing_carriers = [missing_carriers]
+            for missing_carrier in missing_carriers:
+                Inhook_Instruction(missing_carrier).execute(source_machine)
 
     def _instruction_is_no_op_in_merged_program(self, instruction: Knitout_Line) -> bool:
         """
@@ -237,6 +252,8 @@ class Merge_Process:
                 warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
                 warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
                 warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
+                if isinstance(instruction, Hook_Instruction) and not self._source_machine_states[instruction_source].carrier_system.inserting_hook_available:
+                    self._source_machine_states[instruction_source].carrier_system.releasehook()
                 instruction.execute(self._source_machine_states[instruction_source])
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
@@ -356,13 +373,20 @@ class Merge_Process:
         if (isinstance(instruction, Knitout_Header_Line) or isinstance(instruction, Knitout_Version_Line)
                 or (isinstance(instruction, Knitout_Comment_Line) and "No-Op:" in str(instruction))):  # Todo: Update knitout interpreter to have subclass of comments for no-ops
             return  # Do not consume header, version lines, or no-op comments
-        if self._instruction_is_no_op_in_merged_program(instruction):  # No op inhook or releasehook in the merged program.
+        if self._instruction_is_no_op_in_merged_program(instruction) and instruction_source is not None:  # No op inhook or releasehook in the merged program.
+            if isinstance(instruction, Hook_Instruction) and not self._source_machine_states[instruction_source].carrier_system.inserting_hook_available:
+                self._source_machine_states[instruction_source].carrier_system.releasehook()
             if isinstance(instruction_source, Swatch_Side):
                 instruction.execute(self._source_machine_states[instruction_source])  # update carrier in the swatch's machine, but ignore its addition to the merged program
             return
         if remove_connections:
             self._seam_search_space.remove_boundary(instruction)
-        self._release_to_merge_instruction(instruction, instruction_source)  # Add any necessary releases before the instruction is merged in.
+        try:
+            self._release_to_merge_instruction(instruction, instruction_source)  # Add any necessary releases before the instruction is merged in.
+        except Failed_Merge_Release_Exception as e:
+            if isinstance(instruction, Hook_Instruction):
+                return  # Skip invalid hooks
+            raise e
         if not isinstance(instruction, Rack_Instruction):  # Inject a racking instruction to get the merged machine state aligned with the current swatch
             self._rack_to_current_swatch(instruction_source)
         if isinstance(instruction, Needle_Instruction):
