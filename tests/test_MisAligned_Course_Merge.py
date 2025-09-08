@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from clean_up_tests import cleanup_test_files
 from resources.load_ks_resources import load_test_knitscript_to_knitout_to_dat
 
 from quilt_knit.swatch.course_wise_merging.Course_Merge_Process import (
@@ -12,6 +13,8 @@ from quilt_knit.swatch.Swatch import Swatch
 
 
 class TestCourse_Merge_Process(TestCase):
+    def setUp(self):
+        cleanup_test_files()
 
     @staticmethod
     def _make_connection(left_swatch_ks, right_swatch_ks,

@@ -1,7 +1,6 @@
 """ Module containing the Swatch Class"""
 from __future__ import annotations
 
-import copy
 import warnings
 from typing import cast
 
@@ -19,6 +18,9 @@ from knitout_interpreter.knitout_operations.carrier_instructions import (
 from knitout_interpreter.knitout_operations.Header_Line import (
     Knitout_Header_Line,
     get_machine_header,
+)
+from knitout_interpreter.knitout_operations.knitout_instruction_factory import (
+    build_instruction,
 )
 from knitout_interpreter.knitout_operations.Knitout_Line import (
     Knitout_Line,
@@ -718,15 +720,17 @@ class Swatch:
             Returns:
                 Knitout_Line: A copy of the instruction with all needle values shifted rightward by the given value.
             """
-            copy_instruction = copy.copy(instruction)
             if isinstance(instruction, Needle_Instruction):
-                copy_instruction.needle = instruction.needle + shift_needle_count
-                if instruction.has_second_needle:
-                    copy_instruction.needle_2 = instruction.needle_2 + shift_needle_count
-            return copy_instruction
+                shifted_needle = instruction.needle + shift_needle_count
+                if instruction.needle_2 is None:
+                    shifted_needle_2 = None
+                else:
+                    shifted_needle_2 = instruction.needle_2 + shift_needle_count
+                return build_instruction(instruction.instruction_type, shifted_needle, instruction.direction, instruction.carrier_set, shifted_needle_2)
+            else:
+                return instruction
 
-        shifted_instructions = [shift_swatch_instruction(i) for i in self.knitout_program]
-        return Swatch(f"{self.name}_shifted_right_{shift_needle_count}", shifted_instructions)
+        return Swatch(f"{self.name}_shifted_right_{shift_needle_count}", [shift_swatch_instruction(i) for i in self.knitout_program])
 
     def find_carriage_pass_from_course_passes(self, course_pass_count: int) -> int:
         """

@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from clean_up_tests import cleanup_test_files
 from resources.load_ks_resources import load_test_knitscript_to_knitout_to_dat
 
 from quilt_knit.swatch.Swatch import Swatch
@@ -10,6 +11,10 @@ from quilt_knit.swatch.wale_wise_merging.Wale_Wise_Connection import (
 
 
 class TestWale_Merge_Process(TestCase):
+
+    def setUp(self):
+        cleanup_test_files()
+
     @staticmethod
     def _make_connection(bottom_swatch_ks, top_swatch_ks,
                          bottom_leftmost_needle_position: int = 0, bottom_rightmost_needle_position: int | None = None,

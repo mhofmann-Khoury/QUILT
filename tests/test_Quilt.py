@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from clean_up_tests import cleanup_test_files
 from resources.load_ks_resources import load_test_knitscript_to_knitout_to_dat
 
 from quilt_knit.quilt.Quilt import Quilt
@@ -7,6 +8,8 @@ from quilt_knit.swatch.Swatch import Swatch
 
 
 class TestQuilt(TestCase):
+    def setUp(self):
+        cleanup_test_files()
 
     @staticmethod
     def _swatch(ks: str, swatch_name: str, **python_vars) -> Swatch:
@@ -84,4 +87,4 @@ class TestQuilt(TestCase):
         for swatch in swatches:
             swatch.compile_to_dat('jacquard_merge')
             self.assertEqual(len(swatch.carriage_passes), 10)
-            self.assertEqual(len(swatch.knitout_program), 99)
+            self.assertEqual(len(swatch.knitout_program), 102)

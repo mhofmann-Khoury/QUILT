@@ -92,50 +92,16 @@ class Wale_Seam_Search_Space(Seam_Search_Space):
                 self.entrance_instructions.remove(boundary)
         return boundary
 
-    def remove_excluded_exits(self, connection: Wale_Wise_Connection) -> None:
-        """
-        Remove the exit instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
-        Args:
-            connection (Wale_Seam_Connection): The wale wise connection interval to exclude exits outside its connection interval.
-        """
-        sorted_exits = sorted(self.exit_instructions)
-        for exit_instruction in sorted_exits:
-            if exit_instruction.needle.position < connection.bottom_left_needle_position:
-                self.remove_boundary(exit_instruction.instruction)
-            else:
-                break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
-        for exit_instruction in reversed(sorted_exits):
-            if exit_instruction.needle.position > connection.bottom_right_needle_position:
-                self.remove_boundary(exit_instruction.instruction)
-            else:
-                break
-
-    def remove_excluded_entrances(self, connection: Wale_Wise_Connection) -> None:
-        """
-        Remove the entrance instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
-        Args:
-            connection (Wale_Seam_Connection): The wale wise connection interval to exclude entrances outside its connection interval.
-        """
-        sorted_entrances = sorted(self.entrance_instructions)
-        for entrance_instruction in sorted_entrances:
-            if entrance_instruction.needle.position < connection.top_left_needle_position:
-                self.remove_boundary(entrance_instruction.instruction)
-            else:
-                break  # Exit instructions are sorted from left to right, so skip over the middle section that is going to be included
-        for entrance_instruction in reversed(sorted_entrances):
-            if entrance_instruction.needle.position > connection.top_right_needle_position:
-                self.remove_boundary(entrance_instruction.instruction)
-            else:
-                break
-
     def remove_excluded_boundary(self, connection: Wale_Wise_Connection) -> None:
         """
         Remove the boundary instructions in the search space that fall outside the boundary interval defined by the given Wale Wise connection.
         Args:
             connection (Wale_Seam_Connection): The wale wise connection interval to exclude boundary instructions outside its connection interval.
         """
-        self.remove_excluded_entrances(connection)
-        self.remove_excluded_exits(connection)
+        excluded_boundary = set(e.instruction for e in self.entrance_instructions if connection.top_left_needle_position > e.needle.position or e.needle.position > connection.top_right_needle_position)
+        excluded_boundary.update(e.instruction for e in self.exit_instructions if connection.bottom_left_needle_position > e.needle.position or e.needle.position > connection.bottom_right_needle_position)
+        for boundary in excluded_boundary:
+            self.remove_boundary(boundary)
 
     def choose_best_connection(self, boundary_instruction: Wale_Boundary_Instruction, preferred_rack_values: set[int] | None = None) -> Wale_Seam_Connection | None:
         """

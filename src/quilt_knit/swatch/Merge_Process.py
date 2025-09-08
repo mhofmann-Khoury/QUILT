@@ -162,12 +162,26 @@ class Merge_Process:
         if self.instruction_requires_release(instruction):
             assert isinstance(self._merged_program_machine_state.carrier_system.hooked_carrier, Yarn_Carrier)
             release = Releasehook_Instruction(self._merged_program_machine_state.carrier_system.hooked_carrier, "Required release between merges")
-            if self._execute_release(release):
+            if self._will_execute_release(release):
                 self._add_instruction_to_merge(release, instruction_source)
+            elif isinstance(self._merged_program_machine_state.carrier_system.hooked_carrier, Yarn_Carrier) and self._merged_program_machine_state.carrier_system.hooked_carrier.position is None:
+                bad_inhook_index = next(-1-i for i, bad_instruction in enumerate(reversed(self.merged_instructions)) if isinstance(bad_instruction, Inhook_Instruction))
+                self.merged_instructions.pop(bad_inhook_index)
+                carrier_id = self._merged_program_machine_state.carrier_system.hooked_carrier.carrier_id
+                self._merged_program_machine_state.carrier_system.releasehook()
+                self._merged_program_machine_state.carrier_system.outhook(carrier_id)
             else:
                 raise Failed_Merge_Release_Exception(release)
 
-    def _execute_release(self, release_instruction: Releasehook_Instruction) -> bool:
+    def _will_execute_release(self, release_instruction: Releasehook_Instruction) -> bool:
+        """
+
+        Args:
+            release_instruction (Releasehook_Instruction): The releasehook instruction to test if it can be executed on the merged program machine state.
+
+        Returns:
+            bool: True if the release instruction will successfully execute on the current merged program machine state. False, otherwise.
+        """
         if self._merged_program_machine_state.carrier_system.inserting_hook_available:
             return False  # No-op, release isn't needed if the inserting is available
         assert isinstance(self._merged_program_machine_state.carrier_system.hooked_carrier, Yarn_Carrier)
@@ -226,7 +240,7 @@ class Merge_Process:
         if isinstance(instruction, Inhook_Instruction):  # Inhook an active carrier
             return bool(instruction.carrier in self._merged_program_machine_state.carrier_system.active_carriers)
         elif isinstance(instruction, Releasehook_Instruction):  # release free hook or wrong carrier on that hook
-            return not self._execute_release(instruction)
+            return not self._will_execute_release(instruction)
         elif isinstance(instruction, Outhook_Instruction):  # cut inactive carrier
             return bool(not self._merged_program_machine_state.carrier_system[instruction.carrier].is_active)
         else:
