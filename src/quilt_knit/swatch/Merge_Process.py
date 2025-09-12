@@ -53,8 +53,8 @@ from quilt_knit.swatch.course_boundary_instructions import Course_Side
 from quilt_knit.swatch.Seam_Search_Space import Seam_Search_Space
 from quilt_knit.swatch.Swatch import Swatch
 from quilt_knit.swatch.Swatch_Connection import Swatch_Connection
+from quilt_knit.swatch.Swatch_Side import Swatch_Side
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Side
-from quilt_knit.Swatch_Side import Swatch_Side
 
 
 class Failed_Merge_Release_Exception(Knitting_Machine_Exception):
@@ -401,7 +401,7 @@ class Merge_Process:
             if isinstance(instruction, Hook_Instruction):
                 return  # Skip invalid hooks
             raise e
-        if not isinstance(instruction, Rack_Instruction):  # Inject a racking instruction to get the merged machine state aligned with the current swatch
+        if not isinstance(instruction, Rack_Instruction) and instruction_source is not None:  # Inject a racking instruction to get the merged machine state aligned with the current swatch
             self._rack_to_current_swatch(instruction_source)
         if isinstance(instruction, Needle_Instruction):
             # update instruction to align with needle slots based on origin swatch

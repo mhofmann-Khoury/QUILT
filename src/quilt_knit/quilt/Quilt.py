@@ -1,6 +1,7 @@
 """The module containing the Quilt class."""
 from typing import cast
 
+from knitout_interpreter.knitout_operations.Knitout_Line import Knitout_Comment_Line
 from networkx import DiGraph, topological_generations, topological_sort
 
 from quilt_knit.quilt.Swatch_Neighborhood import Swatch_Neighborhood
@@ -339,12 +340,12 @@ class Quilt:
         if match_prior_swatch is not None:
             if isinstance(shift_match_course_interval, dict):
                 prior_course_wise_connections = set(c.swap_matching_swatch_by_carriage_pass_alignment(swatch, match_prior_swatch, interval_shift=shift_match_course_interval)
-                                                    for c in prior_course_wise_connections if match_prior_swatch in c)
+                                                    if match_prior_swatch in c else c for c in prior_course_wise_connections)
             else:
                 prior_course_wise_connections = set(c.swap_matching_swatch(swatch, match_prior_swatch, interval_shift=shift_match_course_interval)
-                                                    for c in prior_course_wise_connections if match_prior_swatch in c)
+                                                    if match_prior_swatch in c else c for c in prior_course_wise_connections)
             prior_wale_wise_connections = set(c.swap_matching_swatch(swatch, match_prior_swatch, interval_shift=shift_match_wale_interval)
-                                              for c in prior_wale_wise_connections if match_prior_swatch in c)
+                                              if match_prior_swatch in c else c for c in prior_wale_wise_connections)
         for connection in prior_course_wise_connections:
             self.connect_swatches_course_wise(connection.left_swatch, connection.right_swatch,
                                               connection.left_bottom_course, connection.left_top_course,
@@ -439,6 +440,9 @@ class Quilt:
         merge_connection = Course_Wise_Connection(remaining_left_swatch, remaining_right_swatch)
         merger = Course_Merge_Process(merge_connection)
         merged_instructions = merger.merge_swatches()
+        merged_instructions = [i for i in merged_instructions if not isinstance(i, Knitout_Comment_Line)]
+        for instruction in merged_instructions:
+            instruction.comment = None
         merged_swatch = Swatch(f"{left_swatch.name}_cm_{right_swatch.name}", merged_instructions)
 
         # Determine which cp-index corresponded to the left and right connection points from the original swatches to the merged swatch.
@@ -471,12 +475,12 @@ class Quilt:
         self._reconnect_swatch(lower_right_swatch, connections_to_lower_right, right_swatch)
 
         # Shift the course-wise connection down by the height of the removed bottom course and 1 if a transfer pass was removed
-        upper_left_down_shift = -1 * (original_connection.left_top_course + int(upper_left_lost_xfer_pass))
+        upper_left_down_shift = -1 - original_connection.left_top_course - int(upper_left_lost_xfer_pass)
         self._reconnect_swatch(upper_left_swatch, connections_to_upper_left, left_swatch,
                                shift_match_course_interval=upper_left_down_shift)
 
         # Shift the course-wise connection down by the height of the removed bottom course and 1 if a transfer pass was removed
-        upper_right_down_shift = -1 * (original_connection.right_top_course + int(upper_right_lost_xfer_pass))
+        upper_right_down_shift = -1 - original_connection.right_top_course - int(upper_right_lost_xfer_pass)
         self._reconnect_swatch(upper_right_swatch, connections_to_upper_right, right_swatch,
                                shift_match_course_interval=upper_right_down_shift)
 

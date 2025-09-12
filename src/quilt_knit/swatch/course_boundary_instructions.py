@@ -10,7 +10,7 @@ from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_D
 )
 
 from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instruction
-from quilt_knit.Swatch_Side import Swatch_Side
+from quilt_knit.swatch.Swatch_Side import Swatch_Side
 
 
 class Course_Side(Swatch_Side, Enum):

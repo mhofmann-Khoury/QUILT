@@ -360,7 +360,7 @@ class Wale_Merge_Process(Merge_Process):
                 added_to_cp = alignment_transfer_pass.add_instruction(xfer, rack=rack_value, all_needle_rack=False)
                 assert added_to_cp, f"Couldn't add {added_to_cp} to Alignment Transfer Pass with rack {rack_value}."
             for xfer in alignment_transfer_pass:
-                self._consume_instruction(xfer, Wale_Side.Top)
+                self._consume_instruction(xfer)
         self._consume_instruction(Rack_Instruction(0, comment="Return alignment racking to 0."))
 
     def _repair_unaligned_boundaries(self, unconnected_exits: set[Needle]) -> None:

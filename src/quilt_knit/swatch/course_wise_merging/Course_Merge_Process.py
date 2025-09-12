@@ -213,20 +213,26 @@ class Course_Merge_Process(Merge_Process):
         return boundary_instruction.source_swatch_name == self.next_swatch.name
 
     @property
-    def first_courses_by_side(self) -> dict[Course_Side, int]:
+    def first_course_on_current_side(self) -> int:
         """
         Returns:
-            dict[Course_Side, int]: Dictionary mapping left and right course sides to the first course on that side to be merged.
+            int: The index of the first course to be merged on the current working swatch.
         """
-        return self.course_wise_connection.first_course_by_side
+        if self._current_merge_side is Course_Side.Left:
+            return self.course_wise_connection.left_bottom_course
+        else:
+            return self.course_wise_connection.right_bottom_course
 
     @property
-    def last_courses_by_side(self) -> dict[Course_Side, int]:
+    def last_course_on_current_side(self) -> int:
         """
         Returns:
-            dict[Course_Side, int]: Dictionary mapping left and right course sides to the last course on that side to be merged.
+            int: The index of the last course to be merged on the current working swatch.
         """
-        return self.course_wise_connection.last_courses_by_side
+        if self._current_merge_side is Course_Side.Left:
+            return self.course_wise_connection.left_top_course
+        else:
+            return self.course_wise_connection.right_top_course
 
     @property
     def next_index(self) -> int | None:
@@ -652,9 +658,9 @@ class Course_Merge_Process(Merge_Process):
         """
         Consumes up to the starting carriage passes of each swatch based on the interval of the course-wise swatch connection.
         """
-        self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, end_on_carriage_pass_index=self.first_courses_by_side[self.current_course_merge_side], remove_connections=True)
+        self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, end_on_carriage_pass_index=self.first_course_on_current_side, remove_connections=True)
         self.swap_swatch_sides()
-        self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, end_on_carriage_pass_index=self.first_courses_by_side[self.current_course_merge_side], remove_connections=True)
+        self._consume_from_current_swatch(end_on_entrances=False, end_on_exits=False, end_on_carriage_pass_index=self.first_course_on_current_side, remove_connections=True)
         self.swap_swatch_sides()  # return to first swatch for merging process
 
     def _available_connections(self, boundary_instruction: Course_Boundary_Instruction,
@@ -980,7 +986,7 @@ class Course_Merge_Process(Merge_Process):
         # Start Merge process
         while not self.left_swatch_is_consumed and not self.right_swatch_is_consumed:
             # Consume up to next boundary instruction or until reaching top course to merge.
-            self._consume_from_current_swatch(end_on_exits=True, end_on_entrances=True, end_on_carriage_pass_index=self.last_courses_by_side[self.current_course_merge_side], remove_connections=False)
+            self._consume_from_current_swatch(end_on_exits=True, end_on_entrances=True, end_on_carriage_pass_index=self.last_course_on_current_side, remove_connections=False)
             if self.next_instruction is None:  # Swatch is fully consumed.
                 self.swap_swatch_sides()
                 break  # end the merge process and continue into the next swatch.
@@ -1016,4 +1022,4 @@ class Course_Merge_Process(Merge_Process):
             bool: True if the current swatch is consumed through the last course of the Course Wise Connection interval. False, otherwise.
         """
         cp_index = self.cp_index_of_next_needle_instruction_in_current_swatch
-        return cp_index is not None and (self.last_courses_by_side[self.current_course_merge_side] <= cp_index)
+        return cp_index is not None and (self.last_course_on_current_side <= cp_index)

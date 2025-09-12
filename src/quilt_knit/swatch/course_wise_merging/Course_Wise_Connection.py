@@ -6,7 +6,6 @@ from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_D
     Carriage_Pass_Direction,
 )
 
-from quilt_knit.swatch.course_boundary_instructions import Course_Side
 from quilt_knit.swatch.Swatch import Swatch
 from quilt_knit.swatch.Swatch_Connection import Swatch_Connection
 
@@ -37,38 +36,38 @@ class Course_Wise_Connection(Swatch_Connection):
         last_carriage_pass_on_left = min(last_carriage_pass_on_left, left_swatch.height)  # regulate last carriage passes to top out at the height of the swatch
         last_carriage_pass_on_right = min(last_carriage_pass_on_right, right_swatch.height)
         super().__init__(left_swatch, right_swatch, first_carriage_pass_on_left, last_carriage_pass_on_left, first_carriage_pass_on_right, last_carriage_pass_on_right)
-        self.last_courses_by_side: dict[Course_Side, int] = {Course_Side.Left: last_carriage_pass_on_left, Course_Side.Right: last_carriage_pass_on_right}
-        self.first_course_by_side: dict[Course_Side, int] = {Course_Side.Left: first_carriage_pass_on_left, Course_Side.Right: first_carriage_pass_on_right}
 
-    @staticmethod
-    def connection_by_dict(left_swatch: Swatch, right_swatch: Swatch,
-                           first_courses_by_side: dict[Course_Side, int] | None = None,
-                           last_courses_by_side: dict[Course_Side, int] | None = None) -> Course_Wise_Connection:
+    @property
+    def merge_left_to_end(self) -> bool:
         """
-        Args:
-            left_swatch (Swatch): The left swatch in the connection.
-            right_swatch (Swatch): The right swatch in the connection.
-            first_courses_by_side (dict[Course_Side, int], optional): Dictionary of Course_Sides keyed to the starting carriage pass index. Missing course sides default to the 0th course.
-            last_courses_by_side (dict[Course_Side, int], optional): Dictionary of Course_Sides keyed to the ending carriage pass index. Missing course sides default to height of the swatch.
-
         Returns:
-            Course_Wise_Connection: The connection formed by the given dictionary definition of the swatch intervals.
+            bool: True if the connection goes all the way to the end of the left swatch, False otherwise.
         """
-        if last_courses_by_side is None:
-            last_courses_by_side = {}
-        if Course_Side.Left not in last_courses_by_side:
-            last_courses_by_side[Course_Side.Left] = left_swatch.height
-        if Course_Side.Right not in last_courses_by_side:
-            last_courses_by_side[Course_Side.Right] = right_swatch.height
-        if first_courses_by_side is None:
-            first_courses_by_side = {}
-        if Course_Side.Left not in first_courses_by_side:
-            first_courses_by_side[Course_Side.Left] = 0
-        if Course_Side.Right not in first_courses_by_side:
-            first_courses_by_side[Course_Side.Right] = 0
-        return Course_Wise_Connection(left_swatch, right_swatch,
-                                      first_courses_by_side[Course_Side.Left], last_courses_by_side[Course_Side.Left],
-                                      first_courses_by_side[Course_Side.Right], last_courses_by_side[Course_Side.Right])
+        return self.left_swatch.height == self.left_top_course
+
+    @property
+    def merge_left_from_beginning(self) -> bool:
+        """
+        Returns:
+            bool: True if the connection starts at the beginning of the left swatch, False otherwise.
+        """
+        return self.right_bottom_course == 0
+
+    @property
+    def merge_right_to_end(self) -> bool:
+        """
+        Returns:
+            bool: True if the connection goes all the way to the end of the right swatch, False otherwise.
+        """
+        return self.right_swatch.height == self.right_top_course
+
+    @property
+    def merge_right_from_beginning(self) -> bool:
+        """
+        Returns:
+            bool: True if the connection starts at the beginning of the right swatch, False otherwise.
+        """
+        return self.right_bottom_course == 0
 
     @property
     def left_start_direction(self) -> Carriage_Pass_Direction | None:
@@ -107,6 +106,40 @@ class Course_Wise_Connection(Swatch_Connection):
             bool: True if the connection goes all the way to the top of the right swatch. False, otherwise.
         """
         return self.right_top_course >= self.right_swatch.height
+
+    def swap_from_swatch(self, new_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
+        """
+        Args:
+            new_swatch (Swatch): The new from swatch in the resulting swatch connection.
+            interval_shift (int, optional): The amount to shift the interval by when swapping the from_swatch. Negative will shift the interval down. Defaults to 0.
+
+        Returns:
+            Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
+        """
+        left_begin = self.from_begin + interval_shift
+        if self.merge_left_from_beginning:
+            left_begin = 0
+        left_end = self.from_end + interval_shift
+        if self.merge_left_to_end:
+            left_end = self.left_swatch.height
+        return Course_Wise_Connection(new_swatch, self.to_swatch, left_begin, left_end, self.to_begin, self.to_end)
+
+    def swap_to_swatch(self, new_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
+        """
+        Args:
+            new_swatch (Swatch): The new to-swatch in the resulting swatch connection.
+            interval_shift (int, optional): The amount to shift the interval by when swapping the to_swatch. Negative will shift the interval down. Defaults to 0.
+
+        Returns:
+            Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
+        """
+        to_begin = self.to_begin + interval_shift
+        if self.merge_right_from_beginning:
+            to_begin = 0
+        to_end = self.to_end + interval_shift
+        if self.merge_right_to_end:
+            to_end = self.right_swatch.height
+        return Course_Wise_Connection(self.from_swatch, new_swatch, self.from_begin, self.from_end, to_begin, to_end)
 
     def swap_from_swatch_by_carriage_pass_alignment(self, new_swatch: Swatch, interval_shift: dict[int, int]) -> Course_Wise_Connection:
         """

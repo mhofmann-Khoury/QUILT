@@ -1,13 +1,29 @@
 """The module containing the Swatch_Connection class."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from intervaltree import Interval
 
 from quilt_knit.swatch.Swatch import Swatch
 
 
+@dataclass
 class Swatch_Connection:
     """A class used as a super class to wale-wise and course-wise swatch connections for merging."""
+    from_swatch: Swatch
+    to_swatch: Swatch
+    from_begin: int
+    from_end: int
+    to_begin: int
+    to_end: int
+    _connection_symbol: str = "->"
+
+    def __post_init__(self) -> None:
+        if self.from_begin >= self.from_end:
+            raise TypeError(f"from_begin ({self.from_begin}) must be less than from_end ({self.from_end} for {self.from_swatch.name} -> {self.to_swatch.name})")
+        if self.to_begin >= self.to_end:
+            raise TypeError(f"to_begin ({self.to_begin}) must be less than to_end ({self.to_end} for {self.from_swatch.name} -> {self.to_swatch.name})")
 
     def __init__(self, from_swatch: Swatch, to_swatch: Swatch,
                  from_begin: int, from_end: int,
