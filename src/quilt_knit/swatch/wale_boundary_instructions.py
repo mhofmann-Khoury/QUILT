@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from knitout_interpreter.knitout_operations.needle_instructions import (
     Drop_Instruction,
@@ -16,6 +17,10 @@ from virtual_knitting_machine.machine_components.needles.Needle import Needle
 from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instruction
 from quilt_knit.swatch.Swatch_Side import Swatch_Side
 
+if TYPE_CHECKING:
+    from knitout_interpreter.knitout_operations.needle_instructions import (
+        Needle_Instruction,
+    )
 
 class Wale_Side(Swatch_Side, Enum):
     """Enumeration of the wale-wise side of a swatch an instruction exists on. Used to differentiate between entrance-exit seam directions."""
