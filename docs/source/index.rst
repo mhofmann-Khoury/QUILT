@@ -151,7 +151,7 @@ A quilt arranged from four swatches in a 2x2 grid pattern:
        swatch.compile_to_dat('quad_quilt_output')
 
 Complex Interlocking Quilt
-"""""""""""""""""""""""
+""""""""""""""""""""""""""
 
 An interlock quilt creates a more complex arrangement with a center piece.
 Each connection between swatches covers only part of a swatch, demonstrating all possible partial connections.
