@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from knitout_interpreter.knitout_operations.needle_instructions import Xfer_Instruction
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
@@ -11,6 +12,11 @@ from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_D
 
 from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instruction
 from quilt_knit.swatch.Swatch_Side import Swatch_Side
+
+if TYPE_CHECKING:
+    from knitout_interpreter.knitout_operations.needle_instructions import (
+        Needle_Instruction,
+    )
 
 
 class Course_Side(Swatch_Side, Enum):
