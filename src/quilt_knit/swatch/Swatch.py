@@ -71,6 +71,11 @@ class Swatch:
     """
         Class that associates a knitout program with the resulting knit graph.
         Used for linking swatches to form Quilts.
+
+        Attributes:
+            carriage_passes (list[Carriage_Pass]): An ordered list of carriage passes in the swatch.
+            wale_entrances (list[Wale_Boundary_Instruction]): The instructions on the bottom boundary of the swatch.
+            wale_exits (list[Wale_Boundary_Instruction]): The instructions on the top boundary of the swatch.
     """
 
     def __init__(self, name: str, knitout_program: str | list[Knitout_Line], prior_machine_state: Knitting_Machine | None = None):
@@ -81,14 +86,11 @@ class Swatch:
             self.knitout_program: list[Knitout_Line] = cast(list[Knitout_Line], knitout_program)
         else:
             self.knitout_program: list[Knitout_Line] = knitout_program
-        self.original_machine_state: Knitting_Machine = Knitting_Machine()
-        if prior_machine_state is not None:
-            self.original_machine_state = self.original_machine_state.copy(prior_machine_state)
-        else:
+        if prior_machine_state is None:
             prior_machine_state = Knitting_Machine()
         self._execute_knitout(prior_machine_state)
-        self.course_boundary_instructions: dict[Course_Boundary_Instruction, Carriage_Pass] = {}
-        self.instructions_on_course_boundary: dict[Needle_Instruction, Course_Boundary_Instruction] = {}
+        self._course_boundary_instructions: dict[Course_Boundary_Instruction, Carriage_Pass] = {}
+        self._instructions_on_course_boundary: dict[Needle_Instruction, Course_Boundary_Instruction] = {}
         self._instruction_to_carriage_pass: dict[Needle_Instruction, Carriage_Pass] = {}
         self._carriage_pass_to_index: dict[Carriage_Pass, int] = {}
         self.carriage_passes: list[Carriage_Pass] = self._knitout_execution.carriage_passes
@@ -100,11 +102,11 @@ class Swatch:
         self._terminal_wales: dict[Loop, list[Wale]] = get_terminal_wales(self.execution_knit_graph)  # Todo update knitgraph to handle this
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
-        self.instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
+        self._instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
         exits_from_entrances = {}
         updated_exits: list[Wale_Boundary_Instruction] = []
         for exit_instruction in self.wale_exits:
-            if exit_instruction.instruction in self.instructions_on_wale_boundary:  # instruction was also an entrance
+            if exit_instruction.instruction in self._instructions_on_wale_boundary:  # instruction was also an entrance
                 entrance = self.get_wale_boundary_instruction(exit_instruction.instruction)
                 entrance.is_exit = True
                 exits_from_entrances[exit_instruction] = entrance
@@ -112,7 +114,7 @@ class Swatch:
             else:
                 updated_exits.append(exit_instruction)
         self.wale_exits: list[Wale_Boundary_Instruction] = updated_exits
-        self.instructions_on_wale_boundary.update({wb.instruction: wb for wb in self.wale_exits if wb not in exits_from_entrances})
+        self._instructions_on_wale_boundary.update({wb.instruction: wb for wb in self.wale_exits if wb not in exits_from_entrances})
 
     def _process_course_boundaries(self) -> None:
         """
@@ -182,17 +184,6 @@ class Swatch:
             warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
             self._knitout_execution: Knitout_Executer = Knitout_Executer(self.knitout_program, first_pass_prior_machine_state)
         self.knitout_program = self._knitout_execution.executed_instructions  # set the knitout program to be the program that is produced by successful execution.
-
-    def print_program(self, output_name: str | None = None) -> None:
-        """
-        Write this knitout program to a file of the given output name.
-        Args:
-            output_name (str, optional): Name of the output file. Defaults to the name of this swatch.
-        """
-        if output_name is None:
-            output_name = f"{self.name}.k"
-        with open(output_name, "w") as output_file:
-            output_file.writelines(str(instruction) for instruction in self.knitout_program)
 
     def _get_wale_entrances(self) -> list[Wale_Boundary_Instruction]:
         if len(self._terminal_wales) == 0:  # the program does not result in any courses to form wales.
@@ -303,8 +294,8 @@ class Swatch:
             boundary_instruction (Course_Boundary_Instruction): The course boundary instruction to add.
         """
         cp = self.get_instruction_pass(boundary_instruction.instruction)
-        self.course_boundary_instructions[boundary_instruction] = cp
-        self.instructions_on_course_boundary[boundary_instruction.instruction] = boundary_instruction
+        self._course_boundary_instructions[boundary_instruction] = cp
+        self._instructions_on_course_boundary[boundary_instruction.instruction] = boundary_instruction
 
     @property
     def execution_knitting_machine(self) -> Knitting_Machine:
@@ -330,7 +321,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is on the course boundary of the swatch, False otherwise.
         """
-        return instruction in self.instructions_on_course_boundary
+        return instruction in self._instructions_on_course_boundary
 
     def instruction_on_wale_boundary(self, instruction: Knitout_Line) -> bool:
         """
@@ -340,7 +331,7 @@ class Swatch:
         Returns:
             bool: True if the instruction is on the wale boundary of the swatch, False otherwise.
         """
-        return instruction in self.instructions_on_wale_boundary
+        return instruction in self._instructions_on_wale_boundary
 
     def get_course_boundary_instruction(self, instruction: Knitout_Line) -> None | Course_Boundary_Instruction:
         """
@@ -352,7 +343,7 @@ class Swatch:
         """
         if self.instruction_on_course_boundary(instruction):
             assert isinstance(instruction, Needle_Instruction)
-            return self.instructions_on_course_boundary[instruction]
+            return self._instructions_on_course_boundary[instruction]
         else:
             return None
 
@@ -369,49 +360,9 @@ class Swatch:
         """
         if self.instruction_on_wale_boundary(instruction):
             assert isinstance(instruction, Needle_Instruction)
-            return self.instructions_on_wale_boundary[instruction]
+            return self._instructions_on_wale_boundary[instruction]
         else:
             raise KeyError(f'The instruction {instruction} is not on the wale boundary.')
-
-    def instruction_on_left_boundary(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is on the left course boundary. False, otherwise.
-        """
-        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_left
-
-    def instruction_on_right_boundary(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is on the right course boundary. False, otherwise.
-        """
-        return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_right
-
-    def instruction_on_bottom_boundary(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is on the bottom wale boundary. False, otherwise.
-        """
-        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_bottom
-
-    def instruction_on_top_boundary(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is on the top wale boundary. False, otherwise.
-        """
-        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_top
 
     def instruction_is_left_exit(self, instruction: Knitout_Line) -> bool:
         """
@@ -433,16 +384,6 @@ class Swatch:
         """
         return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_left_entrance
 
-    def instruction_on_wale_exit(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is an exit to a wale boundary. False, otherwise.
-        """
-        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_exit
-
     def instruction_is_right_exit(self, instruction: Knitout_Line) -> bool:
         """
         Args:
@@ -462,16 +403,6 @@ class Swatch:
             bool: True if the instruction is an entrance to the right boundary. False, otherwise.
         """
         return self.instruction_on_course_boundary(instruction) and cast(Course_Boundary_Instruction, self.get_course_boundary_instruction(instruction)).is_right_entrance
-
-    def instruction_is_wale_entrance(self, instruction: Knitout_Line) -> bool:
-        """
-        Args:
-            instruction (Knitout_Line): The instruction owned by a boundary instruction.
-
-        Returns:
-            bool: True if the instruction is an entrance to a wale boundary. False, otherwise.
-        """
-        return self.instruction_on_wale_boundary(instruction) and self.get_wale_boundary_instruction(instruction).is_entrance
 
     @property
     def name(self) -> str:
@@ -528,7 +459,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary entrances of the left side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_left_entrance]
+        return [b for b in self._course_boundary_instructions if b.is_left_entrance]
 
     @property
     def left_exits(self) -> list[Course_Boundary_Instruction]:
@@ -536,7 +467,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary exits of the left side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_left_exit]
+        return [b for b in self._course_boundary_instructions if b.is_left_exit]
 
     @property
     def left_boundary(self) -> list[Course_Boundary_Instruction]:
@@ -544,7 +475,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary instructions of the left side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_left]
+        return [b for b in self._course_boundary_instructions if b.is_left]
 
     @property
     def right_entrances(self) -> list[Course_Boundary_Instruction]:
@@ -552,7 +483,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary entrances of the right side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_right_entrance]
+        return [b for b in self._course_boundary_instructions if b.is_right_entrance]
 
     @property
     def right_exits(self) -> list[Course_Boundary_Instruction]:
@@ -560,7 +491,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary exits of the right side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_right_exit]
+        return [b for b in self._course_boundary_instructions if b.is_right_exit]
 
     @property
     def right_boundary(self) -> list[Course_Boundary_Instruction]:
@@ -568,7 +499,7 @@ class Swatch:
         Returns:
             list[Course_Boundary_Instruction]: The boundary instructions of the right side of the swatch.
         """
-        return [b for b in self.course_boundary_instructions if b.is_right]
+        return [b for b in self._course_boundary_instructions if b.is_right]
 
     def get_carriage_pass_index_of_instruction(self, instruction: Knitout_Line) -> int | None:
         """

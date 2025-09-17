@@ -11,15 +11,21 @@ from quilt_knit.swatch.Swatch import Swatch
 @dataclass
 class Swatch_Connection:
     """A class used as a super class to wale-wise and course-wise swatch connections for merging."""
-    from_swatch: Swatch
-    to_swatch: Swatch
-    from_begin: int
-    from_end: int
-    to_begin: int
-    to_end: int
+    from_swatch: Swatch  # The swatch being merged from.
+    to_swatch: Swatch  # The swatch being merged into.
+    from_begin: int  # The beginning of the interval to merge on the from-swatch.
+    from_end: int  # Then end of the interval to merge on the from-swatch.
+    to_begin: int  # The beginning of the interval to merge on the to-swatch.
+    to_end: int  # The end of the interval to merge on the to-swatch.
     _connection_symbol: str = "->"
 
     def __post_init__(self) -> None:
+        """
+        Checks that the intervals are correct after the connection has been initialized.
+
+        Raises:
+            TypeError: If the intervals are incorrect.
+        """
         if self.from_begin >= self.from_end:
             raise TypeError(f"from_begin ({self.from_begin}) must be less than from_end ({self.from_end} for {self.from_swatch.name} -> {self.to_swatch.name})")
         if self.to_begin >= self.to_end:
@@ -29,8 +35,6 @@ class Swatch_Connection:
                  from_begin: int, from_end: int,
                  to_begin: int, to_end: int,
                  connection_symbol: str = "->") -> None:
-        assert from_begin < from_end, f"from_begin ({from_begin}) must be less than from_end ({from_end} for {from_swatch.name} -> {to_swatch.name})"
-        assert to_begin < to_end, f"to_begin ({to_begin}) must be less than to_end ({to_end} for {from_swatch.name} -> {to_swatch.name})"
         self.to_end: int = to_end
         self.to_begin: int = to_begin
         self.from_end: int = from_end
@@ -352,19 +356,6 @@ class Swatch_Connection:
             Swatch_Connection: A new connection with the same intervals and the from-swatch swapped for the new given swatch.
         """
         return self.__class__(self.from_swatch, new_swatch, self.from_begin, self.from_end, self.to_begin + interval_shift, self.to_end + interval_shift)
-
-    def get_shifted_connection(self, from_shift: int = 0, to_shift: int = 0) -> Swatch_Connection:
-        """
-        Args:
-            from_shift (int, optional): The amount to shift the interval by when swapping the from_swatch. Negative will shift the interval down. Defaults to 0.
-            to_shift (int, optional): The amount to shift the interval by when swapping the to_swatch. Negative will shift the interval down. Defaults to 0.
-
-        Returns:
-            Swatch_Connection: A new connection involving the same swatches with the connection shifted by the given shift values on either side.
-        """
-        return self.__class__(self.from_swatch, self.to_swatch,
-                              self.from_begin + from_shift, self.from_end + from_shift,
-                              self.to_begin + to_shift, self.to_end + to_shift)
 
     def swap_matching_swatch(self, new_swatch: Swatch, matching_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
         """

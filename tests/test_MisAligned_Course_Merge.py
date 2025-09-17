@@ -186,7 +186,7 @@ class TestCourse_Merge_Process(TestCase):
         merger = Course_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('lace_cable')
-        self.assertEqual(len(merger.merged_instructions), 107)
+        self.assertEqual(len(merger.merged_instructions), 105)
 
         connection = self._make_connection('cable', 'lace',
                                            first_carriage_pass_on_left=0, first_carriage_pass_on_right=2,

@@ -8,7 +8,12 @@ from quilt_knit.swatch.Swatch_Connection import Swatch_Connection
 
 
 class Connection_Interval_Tree:
-    """ A data structure representing an interval of connections between a swatch and its neighbors on a specific side (top, bottom, left, right)."""
+    """ A data structure representing an interval of connections between a swatch and its neighbors on a specific side (top, bottom, left, right).
+
+    Attributes:
+        source_swatch (Swatch): The swatch that owns these connections.
+        interval_tree (IntervalTree): The interval tree representing the spacing of swatch connections.
+    """
 
     def __init__(self, source_swatch: Swatch):
         self.source_swatch: Swatch = source_swatch
@@ -54,13 +59,6 @@ class Connection_Interval_Tree:
         else:
             return False
 
-    def interval_sorted_connected_swatches(self) -> list[Swatch]:
-        """
-        Returns:
-             list[Swatch]: A list of swatches sorted by their interval connections to the source swatch.
-        """
-        return [self._get_connected_swatch(i.data) for i in sorted(self.interval_tree)]
-
     def interval_sorted_connections(self) -> list[Swatch_Connection]:
         """
         Returns:
@@ -83,45 +81,6 @@ class Connection_Interval_Tree:
             return connection.from_interval
         elif connection.to_swatch == self.source_swatch:
             return connection.to_interval
-        else:
-            raise ValueError(f"{connection} does not involve swatch {self.source_swatch}")
-
-    def _get_connected_swatch_interval(self, connection: Swatch_Connection) -> Interval:
-        """
-
-        Args:
-            connection (Swatch_Connection): A connection in the interval tree.
-
-        Returns:
-            Interval: The interval on the opposite of the source-swatch side of the given connection.
-
-        Raises:
-            ValueError: If the given connection is not in the interval tree.
-
-        """
-        if connection.from_swatch == self.source_swatch:
-            return connection.to_interval
-        elif connection.to_interval == self.source_swatch:
-            return connection.from_interval
-        else:
-            raise ValueError(f"{connection} does not involve swatch {self.source_swatch}")
-
-    def _get_connected_swatch(self, connection: Swatch_Connection) -> Swatch:
-        """
-
-        Args:
-            connection (Swatch_Connection): A connection in the interval tree.
-
-        Returns:
-            Swatch: The swatch opposite the source-swatch in the given connection.
-
-        Raises:
-            ValueError: If the given connection is not in the interval tree.
-        """
-        if connection.from_swatch == self.source_swatch:
-            return connection.to_swatch
-        elif connection.to_swatch == self.source_swatch:
-            return connection.from_swatch
         else:
             raise ValueError(f"{connection} does not involve swatch {self.source_swatch}")
 
@@ -198,15 +157,6 @@ class Connection_Interval_Tree:
             int: The hash value of the source swatch.
         """
         return hash(self.source_swatch)
-
-    def print_intervals(self, indent: str = "\t\t\t") -> None:
-        """
-        Prints out the connections in this interval tree, line by line.
-        Args:
-            indent (str,optional): The indent string to use. Defaults to three tabs.
-        """
-        for connection in self.interval_sorted_connections():
-            print(f"{indent}{connection}")
 
     def __repr__(self) -> str:
         """

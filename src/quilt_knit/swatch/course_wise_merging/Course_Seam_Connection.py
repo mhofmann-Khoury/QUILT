@@ -98,14 +98,6 @@ class Course_Seam_Connection(Seam_Connection):
         return str(self)
 
     @property
-    def distance(self) -> int:
-        """
-        Returns:
-            int: The distances between the carriage passes linked by this connection.
-        """
-        return abs(self.exit_instruction.carriage_pass_index - self.entrance_instruction.carriage_pass_index)
-
-    @property
     def different_carriers(self) -> int:
         """
         Returns:
@@ -153,14 +145,6 @@ class Course_Seam_Connection(Seam_Connection):
             return set()
         else:
             return set(self.exit_instruction.carrier_set)
-
-    @property
-    def requires_cut(self) -> bool:
-        """
-        Returns:
-            bool: True if creating this connection will require a cut operation on exit carriers not passed over the connection.
-        """
-        return len(self.shared_carriers) < len(self.exit_carrier_ids)
 
     def __lt__(self, other: Course_Seam_Connection) -> bool:
         """

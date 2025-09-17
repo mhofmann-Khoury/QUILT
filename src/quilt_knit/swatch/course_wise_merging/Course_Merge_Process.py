@@ -1,4 +1,5 @@
 """Module for linking Swatches by vertical seams"""
+import warnings
 
 from knitout_interpreter.knitout_execution import Knitout_Executer
 from knitout_interpreter.knitout_execution_structures.Carriage_Pass import Carriage_Pass
@@ -15,6 +16,16 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
     Miss_Instruction,
     Needle_Instruction,
     Xfer_Instruction,
+)
+from virtual_knitting_machine.knitting_machine_warnings.carrier_operation_warnings import (
+    Mismatched_Releasehook_Warning,
+)
+from virtual_knitting_machine.knitting_machine_warnings.Needle_Warnings import (
+    Knit_on_Empty_Needle_Warning,
+)
+from virtual_knitting_machine.knitting_machine_warnings.Yarn_Carrier_System_Warning import (
+    In_Active_Carrier_Warning,
+    Out_Inactive_Carrier_Warning,
 )
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
@@ -192,26 +203,6 @@ class Course_Merge_Process(Merge_Process):
         """
         return boundary_instruction.source_swatch_name == self.right_swatch.name
 
-    def boundary_in_current_swatch(self, boundary_instruction: Course_Boundary_Instruction) -> bool:
-        """
-        Args:
-            boundary_instruction (Course_Boundary_Instruction): The boundary instruction to check which swatch it belongs to.
-
-        Returns:
-            bool: True if the boundary instruction belongs to the current swatch, False otherwise.
-        """
-        return boundary_instruction.source_swatch_name == self.current_swatch.name
-
-    def boundary_in_next_swatch(self, boundary_instruction: Course_Boundary_Instruction) -> bool:
-        """
-        Args:
-            boundary_instruction (Course_Boundary_Instruction): The boundary instruction to check which swatch it belongs to.
-
-        Returns:
-            bool: True if the boundary instruction belongs to the next swatch, False otherwise.
-        """
-        return boundary_instruction.source_swatch_name == self.next_swatch.name
-
     @property
     def first_course_on_current_side(self) -> int:
         """
@@ -316,20 +307,6 @@ class Course_Merge_Process(Merge_Process):
             return None
         else:
             return self.right_swatch.knitout_program[index]
-
-    def get_instruction_at_index(self, index: int, swatch_side: Course_Side) -> Knitout_Line | None:
-        """
-        Args:
-            index (int): The index of the instruction.
-            swatch_side (Course_Side): The swatch side to source the instruction from
-
-        Returns:
-            Knitout_Line | None: The instruction at the given index in the specified swatch or None if that index is not in that swatch.
-        """
-        if swatch_side is Course_Side.Left:
-            return self.get_left_instruction_at_index(index)
-        else:
-            return self.get_right_instruction_at_index(index)
 
     @property
     def next_left_instruction(self) -> Knitout_Line | None:
@@ -467,34 +444,6 @@ class Course_Merge_Process(Merge_Process):
         """
         return self.current_course_merge_side.opposite
 
-    def boundary_is_entrance(self, boundary_instruction: Course_Boundary_Instruction) -> bool:
-        """
-        Args:
-            boundary_instruction (Course_Boundary_Instruction): A course boundary instruction to check for entrance status in the merger.
-
-        Returns:
-            bool: True if the boundary instruction is an entrance to one of the seam sides of the merger.
-        """
-        if self.boundary_in_right_swatch(boundary_instruction):
-            return boundary_instruction.is_left_entrance  # enter the left side of the right swatch
-        else:
-            assert self.boundary_in_left_swatch(boundary_instruction)
-            return boundary_instruction.is_right_entrance  # enter the right side of the left swatch
-
-    def boundary_is_exit(self, boundary_instruction: Course_Boundary_Instruction) -> bool:
-        """
-        Args:
-            boundary_instruction (Course_Boundary_Instruction): A course boundary instruction to check for exit status in the merger.
-
-        Returns:
-            bool: True if the boundary instruction is an exit from one of the seam sides of the merger.
-        """
-        if self.boundary_in_right_swatch(boundary_instruction):
-            return boundary_instruction.is_left_exit  # exit the left side of the right swatch
-        else:
-            assert self.boundary_in_left_swatch(boundary_instruction)
-            return boundary_instruction.is_right_exit  # exit the right side of the left swatch
-
     @property
     def next_instruction_is_boundary_entrance(self) -> bool:
         """
@@ -610,16 +559,6 @@ class Course_Merge_Process(Merge_Process):
             return None
         assert isinstance(self.next_index, int)
         return self.current_swatch.knitout_program[self.next_index]
-
-    @property
-    def cp_index_of_next_instruction(self) -> int | None:
-        """
-        Returns:
-            int | None: The course index of the next instruction in the current swatch or None if the current swatch is fully consumed.
-        """
-        if self.next_instruction is None:
-            return None
-        return self.current_swatch.get_carriage_pass_index_of_instruction(self.next_instruction)
 
     def _consume_from_current_swatch(self, end_on_entrances: bool = True, end_on_exits: bool = True,
                                      end_on_carriage_pass_index: int | None = None,
@@ -926,22 +865,6 @@ class Course_Merge_Process(Merge_Process):
         else:
             return connection.entrance_instruction
 
-    def _get_cp_index_of_instruction(self, instruction: Needle_Instruction) -> int:
-        """
-        Args:
-            instruction (Needle_Instruction): The needle instruction to find the carriage pass index of in its owning swatch.
-
-        Returns:
-            int: The index of the carriage pass that owns the instruction in the swatch that owns the instruction.
-
-        """
-        cp_index = self.left_swatch.get_cp_index_of_instruction(instruction)
-        if cp_index is None:
-            cp_index = self.right_swatch.get_cp_index_of_instruction(instruction)
-        if cp_index is None:
-            raise ValueError(f"Could not find {instruction} in left or right swatch")
-        return cp_index
-
     def _consume_connection(self, connection: Course_Seam_Connection) -> None:
         """
         Consumes instructions from both swatches to form the given connection. Removes any possible connections consumed in this process.
@@ -1012,7 +935,12 @@ class Course_Merge_Process(Merge_Process):
             self._add_instruction_to_merge(outhook, self.current_course_merge_side)
         self._specify_sources_in_merged_instructions()
         # Clean and reorganize instructions
-        executer = Knitout_Executer(self.merged_instructions)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=In_Active_Carrier_Warning)
+            warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
+            warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
+            warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
+            executer = Knitout_Executer(self.merged_instructions)
         self.merged_instructions = executer.executed_instructions
         return self.merged_instructions
 

@@ -11,7 +11,12 @@ from quilt_knit.swatch.swatch_boundary_instruction import Swatch_Boundary_Instru
 
 
 class Seam_Search_Space:
-    """Super class representing a network of possible connections between two merged swatches."""
+    """Super class representing a network of possible connections between two merged swatches.
+
+    Attributes:
+        seam_network (DiGraph): The network of boundary instructions that form allowed connections between swatches.
+        instructions_to_boundary_instruction (dict[Knitout_line, Swatch_Boundary_Instruction]): Dictionary of Knitout instructions to their corresponding boundary instruction.
+    """
     def __init__(self, from_swatch: Swatch, to_swatch: Swatch) -> None:
         self._from_swatch: Swatch = from_swatch
         self._to_swatch: Swatch = to_swatch

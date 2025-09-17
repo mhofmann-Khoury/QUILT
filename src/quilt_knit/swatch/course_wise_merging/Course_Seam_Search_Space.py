@@ -14,6 +14,10 @@ from quilt_knit.swatch.Swatch import Swatch
 class Course_Seam_Search_Space(Seam_Search_Space):
     """
         Network of potential linking instructions between swatches to form a vertical seam along the courses.
+
+        Attributes:
+            left_swatch_boundaries_by_course_index (dict[int, Course_Boundary_Instruction]): Left-swatch course indices keyed to the boundary of that course.
+            right_swatch_boundaries_by_course_index (dict[int, Course_Boundary_Instruction]): Right-swatch boundaries keyed to the boundary of that course.
     """
 
     def __init__(self, left_swatch: Swatch, right_swatch: Swatch):
@@ -50,27 +54,6 @@ class Course_Seam_Search_Space(Seam_Search_Space):
             Swatch: The right swatch in the merge.
         """
         return self._to_swatch
-
-    def print_search_space(self) -> None:
-        """
-        Prints out the search space for debugging purposes.
-        """
-        print(f"Left Exits from Right Swatch {self.right_swatch}")
-        for left_exit in self.right_swatch.left_exits:
-            if self.seam_network.has_node(left_exit):
-                print(f"\texit {left_exit}")
-                for potential_right_entrance in self.seam_network.successors(left_exit):
-                    print(f"\t\t{potential_right_entrance} enter:\n\t\t\t{self.seam_network.edges[left_exit, potential_right_entrance]['connection']}")
-            else:
-                print(f"\texit {left_exit} -> no compatible right entrances")
-        print(f"Right Exits from Left Swatch {self.left_swatch}")
-        for right_exit in self.left_swatch.right_exits:
-            if self.seam_network.has_node(right_exit):
-                print(f"\t{right_exit} exit")
-                for potential_left_entrance in self.seam_network.successors(right_exit):
-                    print(f"\t\tenter {potential_left_entrance}:\n\t\t\t{self.seam_network.edges[right_exit, potential_left_entrance]['connection']}")
-            else:
-                print(f"\t{right_exit} exit -> no compatible left entrances")
 
     def remove_boundaries_beyond_course_connections(self, course_wise_connection: Course_Wise_Connection,
                                                     remove_left_swatch: bool = True, remove_right_swatch: bool = True) -> None:

@@ -1,7 +1,6 @@
 """Module containing the Course Wise Connection class."""
 from __future__ import annotations
 
-from intervaltree import Interval
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
 )
@@ -90,22 +89,6 @@ class Course_Wise_Connection(Swatch_Connection):
         if first_cp.xfer_pass:
             return None
         return first_cp.direction
-
-    @property
-    def consumes_left_side(self) -> bool:
-        """
-        Returns:
-            bool: True if the connection goes all the way to the top of the left swatch. False, otherwise.
-        """
-        return self.left_top_course >= self.left_swatch.height
-
-    @property
-    def consumes_right_side(self) -> bool:
-        """
-        Returns:
-            bool: True if the connection goes all the way to the top of the right swatch. False, otherwise.
-        """
-        return self.right_top_course >= self.right_swatch.height
 
     def swap_from_swatch(self, new_swatch: Swatch, interval_shift: int = 0) -> Swatch_Connection:
         """
@@ -233,19 +216,3 @@ class Course_Wise_Connection(Swatch_Connection):
             int: The top carriage pass index of the right swatch.
         """
         return self.to_end
-
-    @property
-    def left_interval(self) -> Interval:
-        """
-        Returns:
-            Interval: The interval of carriage pass indices of the left swatch.
-        """
-        return self.from_interval
-
-    @property
-    def right_interval(self) -> Interval:
-        """
-        Returns:
-            Interval: The interval of carriage pass indices of the right swatch.
-        """
-        return self.to_interval

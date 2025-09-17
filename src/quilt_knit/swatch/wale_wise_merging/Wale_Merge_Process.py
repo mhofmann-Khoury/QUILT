@@ -105,27 +105,6 @@ class Wale_Merge_Process(Merge_Process):
         """
         return self.wale_wise_connection.bottom_swatch
 
-    @property
-    def rightmost_needle_positions(self) -> dict[Wale_Side, int]:
-        """
-        :return: The rightmost needle positions for the top and bottom swatches of the merge
-        """
-        return self.wale_wise_connection.rightmost_needle_positions
-
-    @property
-    def leftmost_needle_positions(self) -> dict[Wale_Side, int]:
-        """
-        :return: The leftmost needle positions for the top and bottom swatches of the merge.
-        """
-        return self.wale_wise_connection.leftmost_needle_positions
-
-    @property
-    def max_rack(self) -> int:
-        """
-        :return: The maximum allowed racking to align loops.
-        """
-        return self.seam_search_space.max_rack
-
     def _consume_bottom_swatch(self) -> None:
         """
         Add all instructions from the bottom swatch into the new merged program.

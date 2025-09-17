@@ -60,7 +60,14 @@ class Unconnected_Swatches_Exception(Exception):
 
 
 class Quilt:
-    """A data structure of a dynamic grid of connected swatches which can be merged to form a unified swatch."""
+    """A data structure of a dynamic grid of connected swatches which can be merged to form a unified swatch.
+
+    Attributes:
+        course_wise_connections (DiGraph): A directed graph of the course wise connections between swatches in the quilt.
+        wale_wise_connections (DiGraph): A directed graph of the wale wise connections between swatches in the quilt.
+        swatch_neighborhoods (dict[Swatch, Swatch_Neighborhood]): A dictionary of swatches keyed to their neighborhoods.
+        swatches_to_rightward_shifts (dict[Swatch, int]): A dictionary of swatches keyed to the number of needles to shift them by rightward when merging the quilt.
+    """
     _CONNECTION: str = "connection"
 
     def __init__(self) -> None:
@@ -302,18 +309,6 @@ class Quilt:
         else:
             assert isinstance(connection, Wale_Wise_Connection)
             self.wale_wise_connections.add_edge(connection.from_swatch, connection.to_swatch, connection=connection)
-
-    def print_bottom_up_leftward_traversal(self) -> None:
-        """
-            Prints out the swatch connections in order of horizontal connections using a topological sort of the wale connections.
-        """
-        for i, layer in enumerate(topological_generations(self.wale_wise_connections)):
-            print(f"{i} horizontal layer of quilt")
-            for swatch in layer:
-                print(f"\t{swatch.name} ({swatch.width} needles by {swatch.height} carriage passes)")
-                neighborhood = self.swatch_neighborhoods[swatch]
-                neighborhood.print_right_neighbors("\t\t")
-                neighborhood.print_above_neighbors("\t\t")
 
     def _reconnect_swatch(self, swatch: Swatch | None, prior_connections: set[Swatch_Connection],
                           match_prior_swatch: None | Swatch,

@@ -67,7 +67,11 @@ class Failed_Merge_Release_Exception(Knitting_Machine_Exception):
 
 
 class Merge_Process:
-    """Super class for swatch merging processes that tracks the merged machine state."""
+    """Super class for swatch merging processes that tracks the merged machine state.
+
+    Attributes:
+        merged_instructions (list[Knitout_Line]): The ordered list of knitout instructions that result from the merge.
+    """
 
     def __init__(self, swatch_connection: Swatch_Connection, starting_swatch_side: Swatch_Side, seam_search_space: Seam_Search_Space) -> None:
         self._swatch_connection: Swatch_Connection = swatch_connection
@@ -305,6 +309,7 @@ class Merge_Process:
                     source_machine.carrier_system._searching_for_position = False
                 instruction.execute(source_machine)
         with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=In_Active_Carrier_Warning)
             warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
             warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
             warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
@@ -423,10 +428,14 @@ class Merge_Process:
                 or (isinstance(instruction, Knitout_Comment_Line) and "No-Op:" in str(instruction))):  # Todo: Update knitout interpreter to have subclass of comments for no-ops
             return  # Do not consume header, version lines, or no-op comments
         if self._instruction_is_no_op_in_merged_program(instruction) and instruction_source is not None:  # No op inhook or releasehook in the merged program.
-            if isinstance(instruction, Hook_Instruction) and not self._source_machine_states[instruction_source].carrier_system.inserting_hook_available:
+            if (isinstance(instruction, Hook_Instruction) and not isinstance(instruction, Releasehook_Instruction)
+                    and not self._source_machine_states[instruction_source].carrier_system.inserting_hook_available):
                 self._source_machine_states[instruction_source].carrier_system.releasehook()
             if isinstance(instruction_source, Swatch_Side):
-                instruction.execute(self._source_machine_states[instruction_source])  # update carrier in the swatch's machine, but ignore its addition to the merged program
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
+                    warnings.filterwarnings('ignore', category=Mismatched_Releasehook_Warning)
+                    instruction.execute(self._source_machine_states[instruction_source])  # update carrier in the swatch's machine, but ignore its addition to the merged program
             return
         if remove_connections:
             self._seam_search_space.remove_boundary(instruction)

@@ -11,7 +11,15 @@ from quilt_knit.swatch.wale_wise_merging.Wale_Wise_Connection import (
 
 
 class Swatch_Neighborhood:
-    """A data structure organizing the interval trees of course and wale wise connections to a specific swatch."""
+    """A data structure organizing the interval trees of course and wale wise connections to a specific swatch.
+
+    Attributes:
+        swatch (Swatch): The swatch at the center of this neighborhood.
+        intervals_to_left (Connection_Interval_Tree): The intervals of connections on the left of the swatch.
+        intervals_to_right (Connection_Interval_Tree): The intervals of connections on the right of the swatch.
+        intervals_below (Connection_Interval_Tree): The intervals of connections below the swatch.
+        intervals_above (Connection_Interval_Tree): The intervals of connections above the swatch.
+    """
 
     def __init__(self, swatch: Swatch):
         self.swatch: Swatch = swatch
@@ -54,7 +62,7 @@ class Swatch_Neighborhood:
         lower_course = max(lower_course, 0)
         upper_course = min(upper_course, self.swatch.height)
         connections: set[Swatch_Connection] = set()
-        if not exclude_top_connections and upper_course >= (self.swatch.height-1): # Do this before skipping out on mismatch lower and upper courses
+        if not exclude_top_connections and upper_course >= (self.swatch.height - 1):  # Do this before skipping out on mismatch lower and upper courses
             connections.update(i.data for i in self.intervals_above.interval_tree)
         if lower_course > upper_course:
             return connections
@@ -144,60 +152,3 @@ class Swatch_Neighborhood:
         interval_tree = self.get_interval_tree(connection)
         if interval_tree is not None:
             self.get_interval_tree(connection).make_connection(connection)
-
-    def connection_is_blocked(self, connection: Swatch_Connection) -> bool:
-        """
-        A connection is blocked by this neighborhood if the following criteria are met:
-        * It involves the source swatch.
-        * The connection overlaps, but does not envelop, an existing connection in the tree
-
-        Args:
-            connection (Swatch_Connection): The connection that may be blocked by connections in this neighborhood.
-
-        Returns:
-            bool: True if the given connection is blocked, False otherwise.
-        """
-        try:
-            return self.get_interval_tree(connection).connection_is_blocked(connection)
-        except ValueError:
-            return False  # value error raised because this does not involve the source swatch, therefore not blocked.
-
-    def print_left_neighbors(self, indent: str = '\t\t') -> None:
-        """
-        Prints out the leftward connections of the swatch.
-
-        Args:
-            indent (str, optional): The indent to start printing at. Defaults to two tabs.
-        """
-        print(f"{indent}{self.swatch} course-merges leftward (<-) to:")
-        self.intervals_to_left.print_intervals(f"{indent}\t")
-
-    def print_right_neighbors(self, indent: str = '\t\t') -> None:
-        """
-        Prints out the rightward connections of the swatch.
-
-        Args:
-            indent (str, optional): The indent to start printing at. Defaults to two tabs.
-        """
-        print(f"{indent}{self.swatch} course-merges rightward (->) to:")
-        self.intervals_to_right.print_intervals(f"{indent}\t")
-
-    def print_below_neighbors(self, indent: str = '\t\t') -> None:
-        """
-        Prints out the bottom connections of the swatch.
-
-        Args:
-            indent (str, optional): The indent to start printing at. Defaults to two tabs.
-        """
-        print(f"{indent}{self.swatch} wale-merges up from (^):")
-        self.intervals_below.print_intervals(f"{indent}\t")
-
-    def print_above_neighbors(self, indent: str = '\t\t') -> None:
-        """
-        Prints out the above connections of the swatch.
-
-        Args:
-            indent (str, optional): The indent to start printing at. Defaults to two tabs.
-        """
-        print(f"{indent}{self.swatch} wale-merges up to (^):")
-        self.intervals_above.print_intervals(f"{indent}\t")

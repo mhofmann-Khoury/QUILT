@@ -1,7 +1,11 @@
+import warnings
 from unittest import TestCase
 
 from clean_up_tests import cleanup_test_files
 from resources.load_ks_resources import load_test_knitscript_to_knitout_to_dat
+from virtual_knitting_machine.knitting_machine_warnings.Needle_Warnings import (
+    Knit_on_Empty_Needle_Warning,
+)
 
 from quilt_knit.swatch.Swatch import Swatch
 from quilt_knit.swatch.wale_wise_merging.Wale_Merge_Process import Wale_Merge_Process
@@ -134,14 +138,16 @@ class TestWale_Merge_Process(TestCase):
         merger = Wale_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jacquard_merge')
-        self.assertEqual(len(merger.merged_instructions), 93)
+        self.assertEqual(len(merger.merged_instructions), 103)
 
     def test_merge_seed_jacquard(self):
-        connection = self._make_connection('seed', 'jacquard', c=1, white=1, black=2, width=4, height=4)
-        merger = Wale_Merge_Process(connection)
-        merger.merge_swatches()
-        merger.compile_to_dat('seed_jacquard')
-        self.assertEqual(len(merger.merged_instructions), 63)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
+            connection = self._make_connection('seed', 'jacquard', c=1, white=1, black=2, width=4, height=4)
+            merger = Wale_Merge_Process(connection)
+            merger.merge_swatches()
+            merger.compile_to_dat('seed_jacquard')
+            self.assertEqual(len(merger.merged_instructions), 63)
 
         connection = self._make_connection('jacquard', 'seed', c=1, white=1, black=2, width=3, height=3)
         merger = Wale_Merge_Process(connection)

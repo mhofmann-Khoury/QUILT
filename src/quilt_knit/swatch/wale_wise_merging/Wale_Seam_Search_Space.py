@@ -16,12 +16,24 @@ from quilt_knit.swatch.wale_wise_merging.Wale_Wise_Connection import (
 
 
 class Wale_Seam_Search_Space(Seam_Search_Space):
-    """ Network of potential linking instructions between swatches to form a horizontal seam."""
+    """ Network of potential linking instructions between swatches to form a horizontal seam.
+
+    Attributes:
+        exit_instructions (set[Wale_Boundary_Instruction]): The set of wale boundary instructions that exit the bottom swatch.
+        entrance_instructions (set[Wale_Boundary_Instruction]): The set of wale boundary instructions that enter the top swatch.
+
+    """
     _NEEDED_INSTRUCTIONS = "needed_instructions"
 
-    def __init__(self, bottom_swatch: Swatch, top_swatch: Swatch, max_rack: int = 2):
+    def __init__(self, bottom_swatch: Swatch, top_swatch: Swatch, max_rack: int = 2) -> None:
+        """
+        Initializes the Wale_Seam_Search_Space between the bottom and top swatches.
+        Args:
+            bottom_swatch (Swatch): The bottom swatch to be merged from.
+            top_swatch (Swatch): The top swatch to be merged to.
+            max_rack (int, optional): The maximum racking alignment allowed to form a connection. Defaults to 2.
+        """
         super().__init__(bottom_swatch, top_swatch)
-        self.max_rack: int = max_rack
         sorted_bottom_exits: list[Wale_Boundary_Instruction] = sorted(self.bottom_swatch.wale_exits, key=lambda wb: wb.needle.position)
         self.exit_instructions: set[Wale_Boundary_Instruction] = set(sorted_bottom_exits)
         sorted_top_entrances: list[Wale_Boundary_Instruction] = sorted(self.top_swatch.wale_entrances, key=lambda wb: wb.needle.position)
@@ -98,53 +110,12 @@ class Wale_Seam_Search_Space(Seam_Search_Space):
         Args:
             connection (Wale_Seam_Connection): The wale wise connection interval to exclude boundary instructions outside its connection interval.
         """
-        excluded_boundary = set(e.instruction for e in self.entrance_instructions if connection.top_left_needle_position > e.needle.position or e.needle.position > connection.top_right_needle_position)
-        excluded_boundary.update(e.instruction for e in self.exit_instructions if connection.bottom_left_needle_position > e.needle.position or e.needle.position > connection.bottom_right_needle_position)
+        excluded_boundary = set(e.instruction for e in self.entrance_instructions
+                                if connection.top_left_needle_position > e.needle.position or e.needle.position > connection.top_right_needle_position)
+        excluded_boundary.update(e.instruction for e in self.exit_instructions
+                                 if connection.bottom_left_needle_position > e.needle.position or e.needle.position > connection.bottom_right_needle_position)
         for boundary in excluded_boundary:
             self.remove_boundary(boundary)
-
-    def choose_best_connection(self, boundary_instruction: Wale_Boundary_Instruction, preferred_rack_values: set[int] | None = None) -> Wale_Seam_Connection | None:
-        """
-        Args:
-            boundary_instruction (Wale_Boundary_Instruction): The boundary instruction to choose the best connection to.
-            preferred_rack_values (set[int], optional): The rack values preferred as a tie-breaker for aligning instructions that require a racking. By default, there is no preference.
-
-        Returns:
-            Wale_Seam_Connection | None: The connection between the exit instruction and the entrance instruction.
-
-        Notes:
-            * If rackings have already been assigned to form other connections, these racking should be included in the preferred_rack_values set.
-        """
-        sorted_potential_connections = cast(list[Wale_Seam_Connection], sorted(self.available_connections(boundary_instruction)))
-        if len(sorted_potential_connections) == 0:
-            return None
-        if preferred_rack_values is None:  # no preferred racking, so take the shortest connection
-            return sorted_potential_connections[0]
-        else:
-            best_0_racking_option = None
-            best_racking_match = None
-            best_non_match = None
-            for connection in sorted_potential_connections:
-                minimum_connection_instructions = connection.minimum_instructions_to_connect_to_entrance()
-                assert isinstance(minimum_connection_instructions, list)
-                instruction_count = len(minimum_connection_instructions)
-                if instruction_count == 0:  # alignment possible without xfers so just take that
-                    return connection
-                required_rack = connection.required_rack()
-                if required_rack == 0 and best_0_racking_option is None:  # first match found that requires no special alignment.
-                    best_0_racking_option = connection
-                elif best_0_racking_option is not None:
-                    if best_racking_match is None and required_rack in preferred_rack_values:  # first match found that requires no additional alignment
-                        best_racking_match = connection
-                    elif best_non_match is None:  # First match found that requires a non-preferred rack value
-                        best_non_match = connection
-            if isinstance(best_0_racking_option, Wale_Seam_Connection):
-                return best_0_racking_option
-            elif isinstance(best_racking_match, Wale_Seam_Connection):
-                return best_0_racking_option
-            else:
-                assert isinstance(best_non_match, Wale_Seam_Connection)
-                return best_non_match
 
     def needed_instructions(self, exit_instruction: Wale_Boundary_Instruction, entrance_instruction: Wale_Boundary_Instruction) -> int:
         """
@@ -156,24 +127,3 @@ class Wale_Seam_Search_Space(Seam_Search_Space):
             int: The number of instructions needed to connect the exit and entrance instructions.
         """
         return int(self.seam_network.edges[exit_instruction, entrance_instruction][self._NEEDED_INSTRUCTIONS])
-
-    def print_search_space(self) -> None:
-        """
-        Prints out the search space for debugging purposes.
-        """
-        print(f"Exits from Bottom Swatch {self.bottom_swatch.name}")
-        for bottom_exit in self.bottom_swatch.wale_exits:
-            if self.seam_network.has_node(bottom_exit):
-                print(f"\texit {bottom_exit.instruction}")
-                for potential_top_entrance in self.seam_network.successors(bottom_exit):
-                    print(f"\t\t{self.needed_instructions(bottom_exit, potential_top_entrance)} instructions align to {potential_top_entrance.instruction}")
-            else:
-                print(f"\tNo entrances align with exit {bottom_exit.instruction}")
-        print(f"Entrances to Top Swatch {self.top_swatch.name}")
-        for top_entrance in self.top_swatch.wale_entrances:
-            if self.seam_network.has_node(top_entrance):
-                print(f"\tEnter {top_entrance.instruction}")
-                for potential_bottom_exit in self.seam_network.predecessors(top_entrance):
-                    print(f"\t\t{self.needed_instructions(potential_bottom_exit, top_entrance)} instructions align to {potential_bottom_exit.instruction}")
-            else:
-                print(f"\tNo exits align with entrance {top_entrance.instruction}")
