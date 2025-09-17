@@ -213,7 +213,7 @@ class TestWale_Merge_Process(TestCase):
         merger = Wale_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jacquard_merge')
-        self.assertEqual(len(merger.merged_instructions), 59)
+        self.assertEqual(len(merger.merged_instructions), 51)
 
         connection = self._make_connection('jacquard', 'jacquard',
                                            shift=-2,
@@ -221,7 +221,7 @@ class TestWale_Merge_Process(TestCase):
         merger = Wale_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jacquard_merge')
-        self.assertEqual(len(merger.merged_instructions), 53)
+        self.assertEqual(len(merger.merged_instructions), 45)
 
     def test_merge_seed_jacquard(self):
         connection = self._make_connection('seed', 'jacquard',
@@ -230,11 +230,11 @@ class TestWale_Merge_Process(TestCase):
         merger = Wale_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('seed_jacquard')
-        self.assertEqual(len(merger.merged_instructions), 79)
+        self.assertEqual(len(merger.merged_instructions), 63)
         connection = self._make_connection('jacquard', 'seed',
                                            shift=-2,
                                            c=1, white=1, black=2, width=4, height=4)
         merger = Wale_Merge_Process(connection)
         merger.merge_swatches()
         merger.compile_to_dat('jacquard_seed')
-        self.assertEqual(len(merger.merged_instructions), 83)
+        self.assertEqual(len(merger.merged_instructions), 75)

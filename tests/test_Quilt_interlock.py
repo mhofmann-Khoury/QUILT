@@ -109,7 +109,7 @@ class TestQuilt(TestCase):
 
     def test_jacquard_quilt(self):
         quilt = self._interlock_quilt("jacquard", "jacquard", "jacquard", "jacquard", "jacquard",
-                                      width=(4, 8), height=(4, 8), white=1, black=1)
+                                      width=(4, 8), height=(4, 8), white=1, black=2)
         swatches = quilt.merge_quilt()
         self.assertEqual(len(swatches), 1)
         for swatch in swatches:

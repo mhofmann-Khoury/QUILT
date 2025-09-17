@@ -86,5 +86,5 @@ class TestQuilt(TestCase):
         self.assertEqual(len(swatches), 1)
         for swatch in swatches:
             swatch.compile_to_dat('jacquard_merge')
-            self.assertEqual(len(swatch.carriage_passes), 10)
-            self.assertEqual(len(swatch.knitout_program), 102)
+            self.assertEqual(len(swatch.carriage_passes), 8)
+            self.assertEqual(len(swatch.knitout_program), 86)

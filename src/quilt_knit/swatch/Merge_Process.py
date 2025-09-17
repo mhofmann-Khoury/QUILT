@@ -22,6 +22,7 @@ from knitout_interpreter.knitout_operations.needle_instructions import (
     Loop_Making_Instruction,
     Miss_Instruction,
     Needle_Instruction,
+    Tuck_Instruction,
 )
 from knitout_interpreter.knitout_operations.Rack_Instruction import Rack_Instruction
 from knitout_to_dat_python.knitout_to_dat import knitout_to_dat
@@ -42,6 +43,7 @@ from virtual_knitting_machine.knitting_machine_warnings.Yarn_Carrier_System_Warn
 from virtual_knitting_machine.machine_components.carriage_system.Carriage_Pass_Direction import (
     Carriage_Pass_Direction,
 )
+from virtual_knitting_machine.machine_components.needles.Needle import Needle
 from virtual_knitting_machine.machine_components.yarn_management.Yarn_Carrier import (
     Yarn_Carrier,
 )
@@ -165,7 +167,7 @@ class Merge_Process:
             if self._will_execute_release(release):
                 self._add_instruction_to_merge(release, instruction_source)
             elif isinstance(self._merged_program_machine_state.carrier_system.hooked_carrier, Yarn_Carrier) and self._merged_program_machine_state.carrier_system.hooked_carrier.position is None:
-                bad_inhook_index = next(-1-i for i, bad_instruction in enumerate(reversed(self.merged_instructions)) if isinstance(bad_instruction, Inhook_Instruction))
+                bad_inhook_index = next(-1 - i for i, bad_instruction in enumerate(reversed(self.merged_instructions)) if isinstance(bad_instruction, Inhook_Instruction))
                 self.merged_instructions.pop(bad_inhook_index)
                 carrier_id = self._merged_program_machine_state.carrier_system.hooked_carrier.carrier_id
                 self._merged_program_machine_state.carrier_system.releasehook()
@@ -205,29 +207,56 @@ class Merge_Process:
         insert_float_yarn = Inhook_Instruction(carrier, 'Bring in for merge alignment')
         self._add_instruction_to_merge(insert_float_yarn, instruction_source)
 
-    def _inhook_missing_carriers(self, instruction: Loop_Making_Instruction, instruction_source: Swatch_Side | None) -> None:
+    def _inhook_missing_carriers(self, instruction: Loop_Making_Instruction, instruction_source: Swatch_Side | None, original_instruction: Loop_Making_Instruction | None) -> None:
         """
         Adds inhook operations for any carrier used in the given instruction that is not currently active on the merged machine.
         Args:
             instruction (Loop_Making_Instruction): The instruction that may require carriers to be activated.
             instruction_source (Swatch_Side, optional): Specifies the source swatch of the instruction that triggered inhooks.
+            original_instruction (Loop_Making_Instruction | None): The original instruction from the swatch being merged from. If None, the given instruction does not belong to an original swatch.
         """
         assert isinstance(instruction.carrier_set, Yarn_Carrier_Set)
         missing_carriers = self._merged_program_machine_state.carrier_system[self._merged_program_machine_state.carrier_system.missing_carriers(instruction.carrier_set.carrier_ids)]
         if not isinstance(missing_carriers, list):
             missing_carriers = [missing_carriers]
+        rightward_carriers = []
         for missing_carrier in missing_carriers:
-            assert instruction.direction is not Carriage_Pass_Direction.Rightward, f"Inserting a carrier before a rightward loop is formed by {instruction}"
+            if instruction.direction is Carriage_Pass_Direction.Rightward:
+                rightward_carriers.append(missing_carrier)
             insert_float_yarn = Inhook_Instruction(missing_carrier, 'Bring in carrier from merge')
             self._release_to_merge_instruction(insert_float_yarn, instruction_source)
             self._add_instruction_to_merge(insert_float_yarn, instruction_source)
+        if len(rightward_carriers) > 0:
+            self._tuck_float_leftward(Yarn_Carrier_Set(rightward_carriers), instruction.needle)
         if instruction_source is not None:
+            assert original_instruction is not None
             source_machine = self._source_machine_states[instruction_source]
             missing_carriers = source_machine.carrier_system[source_machine.carrier_system.missing_carriers(instruction.carrier_set.carrier_ids)]
             if not isinstance(missing_carriers, list):
                 missing_carriers = [missing_carriers]
+            if len(missing_carriers) > 0 and not source_machine.carrier_system.inserting_hook_available:
+                source_machine.carrier_system.releasehook()
             for missing_carrier in missing_carriers:
                 Inhook_Instruction(missing_carrier).execute(source_machine)
+            if original_instruction.direction is Carriage_Pass_Direction.Rightward:
+                self._tuck_float_leftward(Yarn_Carrier_Set(missing_carriers), original_instruction.needle, source_machine)
+
+    def _tuck_float_leftward(self, carrier_set: Yarn_Carrier_Set, start_needle: Needle, machine: Knitting_Machine | None = None, tuck_spacing: int = 3) -> None:
+        """
+        Adds tuck instructions in a leftward direction onto existing loops to move cut yarns into place to prevent rightward insertions of yarns.
+        Args:
+            carrier_set (Yarn_Carrier_Set): The set of carriers to tuck with.
+            start_needle (Needle): The needle that the next knit instruction will be executed on. The tucks are added up to this location.
+            machine (Knitting_Machine, optional): The machine to add the tucked loops to. Default to the Merged-Program knitting machine.
+            tuck_spacing (int, optional): The spacing of between tucks on existing loops. Defaults to 3.
+        """
+        if machine is None:
+            machine = self._merged_program_machine_state
+        tuck_needles = Carriage_Pass_Direction.Leftward.sort_needles(machine.all_loops(), machine.rack)
+        tuck_needles = [n for n in tuck_needles if n.position >= start_needle.position]
+        tuck_needles = tuck_needles[0::tuck_spacing]
+        for needle in tuck_needles:
+            self._add_instruction_to_merge(Tuck_Instruction(needle, Carriage_Pass_Direction.Leftward, carrier_set, "Leftward Insertion after long float"), instruction_source=None)
 
     def _instruction_is_no_op_in_merged_program(self, instruction: Knitout_Line) -> bool:
         """
@@ -261,14 +290,20 @@ class Merge_Process:
         if instruction is None:
             instruction = merge_instruction
         if instruction_source is not None:
+
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=In_Active_Carrier_Warning)
                 warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
                 warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
                 warnings.filterwarnings('ignore', category=Knit_on_Empty_Needle_Warning)
-                if isinstance(instruction, Hook_Instruction) and not self._source_machine_states[instruction_source].carrier_system.inserting_hook_available:
-                    self._source_machine_states[instruction_source].carrier_system.releasehook()
-                instruction.execute(self._source_machine_states[instruction_source])
+                source_machine = self._source_machine_states[instruction_source]
+                if isinstance(instruction, Hook_Instruction) and not source_machine.carrier_system.inserting_hook_available:
+                    source_machine.carrier_system.releasehook()
+                if isinstance(instruction, Loop_Making_Instruction) and instruction.direction is Carriage_Pass_Direction.Rightward and source_machine.carrier_system.searching_for_position:
+                    source_machine.carrier_system._hook_position = instruction.needle.position + 1  # Position yarn inserting hook at the needle slot to the right of the needle.
+                    source_machine.carrier_system.hook_input_direction = Carriage_Pass_Direction.Leftward
+                    source_machine.carrier_system._searching_for_position = False
+                instruction.execute(source_machine)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=Out_Inactive_Carrier_Warning)
             warnings.filterwarnings("ignore", category=Mismatched_Releasehook_Warning)
@@ -409,11 +444,10 @@ class Merge_Process:
             if isinstance(merge_instruction, Loop_Making_Instruction):  # Long floats may be created by this operation
                 for carrier, float_values in self._get_floats_to_instruction(merge_instruction).items():
                     float_len = float_values[0]
-                    float_direction = float_values[1]
                     if float_len >= max_float:
-                        assert float_direction is not Carriage_Pass_Direction.Rightward, f"Cutting a Rightward float to consume instruction {instruction}"
                         self._cut_and_reinsert_carrier(carrier, instruction_source)
-                self._inhook_missing_carriers(merge_instruction, instruction_source)  # Inject any remaining carriers that will be needed by this instruction.
+                assert isinstance(instruction, Loop_Making_Instruction)
+                self._inhook_missing_carriers(merge_instruction, instruction_source, instruction)  # Inject any remaining carriers that will be needed by this instruction.
         else:
             merge_instruction = instruction  # There is no difference between the merged instruction and its source.
         self._add_instruction_to_merge(merge_instruction, instruction_source, instruction)
