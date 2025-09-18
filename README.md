@@ -2,7 +2,6 @@
 
 A knit-programming library for modular combination of knitted structures defined by the knitout machine knitting language.
 
-[![Build Status](https://img.shields.io/github/workflow/status/mhofmann-Khoury/QUILT/CI)](https://github.com/mhofmann-Khoury/QUILT/actions)
 [![PyPI Version](https://img.shields.io/pypi/v/quilt-knit)](https://pypi.org/project/quilt-knit/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/quilt-knit)](https://pypi.org/project/quilt-knit/)
 
@@ -26,7 +25,7 @@ Requires Python 3.11 or higher.
 
 ## Documentation
 
-**📖 Full documentation is available at: https://mhofmann-Khoury.github.io/quilt-knit/**
+**📖 Full documentation is available at: https://mhofmann-khoury.github.io/QUILT/**
 
 The documentation includes:
 - Complete installation instructions

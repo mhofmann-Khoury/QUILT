@@ -3,10 +3,6 @@ Quilt
 
 A knit-programming library for modular combination of knitted structures defined by the knitout machine knitting language.
 
-.. image:: https://img.shields.io/github/workflow/status/mhofmann-Khoury/QUILT/CI
-   :target: https://github.com/mhofmann-Khoury/QUILT/actions
-   :alt: Build Status
-
 .. image:: https://img.shields.io/pypi/v/quilt-knit
    :target: https://pypi.org/project/quilt-knit/
    :alt: PyPI Version

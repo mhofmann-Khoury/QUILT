@@ -12,26 +12,24 @@ build-backend = "poetry.core.masonry.api"  # Use Poetry's build system
 # All the information about your project that will appear on PyPI
 [tool.poetry]
 name = "quilt-knit"
-version = "1.0.0"
+version = "1.0.1"
 description = "A knit-programming library for modular combination of knitted structures defined by the knitout machine knitting language."
 authors = ["Megan Hofmann <m.hofmann@northeastern.edu>", "John 'Jack' Hester <hester.jo@northeastern.edu>"]
 maintainers = ["Megan Hofmann <m.hofmann@northeastern.edu>", "John 'Jack' Hester <hester.jo@northeastern.edu>"]
 license = "License :: Free for non-commercial use"                     # License type (shows up on PyPI)
 readme = "README.md"                # File to use as long description on PyPI
-homepage = "https://mhofmann-Khoury.github.io/quilt-knit/"
-repository = "https://github.com/mhofmann-Khoury/quilt-knit"
-documentation = "https://mhofmann-Khoury.github.io/quilt-knit/"
+homepage = "https://mhofmann-khoury.github.io/QUILT/"
+repository = "https://github.com/mhofmann-Khoury/QUILT"
+documentation = "https://mhofmann-khoury.github.io/QUILT/"
 keywords = ["machine knitting", "act lab", "Northeastern University", "knitout", "quilt", "knit script"]
 classifiers = [                     # PyPI classifiers for categorization
     "Development Status :: 3 - Alpha",
     "Natural Language :: English",                         # Human language
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",                  # Platform support
     "Programming Language :: Python :: 3",                # Python support
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",             # Latest Python version
     "Topic :: Scientific/Engineering",
 ]
 
