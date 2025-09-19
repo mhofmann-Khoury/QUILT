@@ -4,7 +4,6 @@ from __future__ import annotations
 import warnings
 from typing import cast
 
-from knit_graphs.artin_wale_braids.Wale import Wale
 from knit_graphs.Knit_Graph import Knit_Graph
 from knit_graphs.Loop import Loop
 from knitout_interpreter.knitout_execution import Knitout_Executer
@@ -54,19 +53,6 @@ from quilt_knit.swatch.course_boundary_instructions import (
 from quilt_knit.swatch.wale_boundary_instructions import Wale_Boundary_Instruction
 
 
-def get_terminal_wales(knit_graph: Knit_Graph) -> dict[Loop, list[Wale]]:
-    """Get wale groups organized by their terminal loops.
-    # TODO Fix this behavior in knit graphs
-    Returns:
-        dict[Loop, list[Wale]]: Dictionary mapping terminal loops to list of wales that terminate that wale.
-    """
-    wale_groups = {}
-    for loop in knit_graph:
-        if knit_graph.is_terminal_loop(loop):
-            wale_groups[loop] = [wale for wale in knit_graph.get_wales_ending_with_loop(loop)]
-    return wale_groups
-
-
 class Swatch:
     """
         Class that associates a knitout program with the resulting knit graph.
@@ -99,7 +85,6 @@ class Swatch:
             for instruction in cp:
                 self._instruction_to_carriage_pass[instruction] = cp
         self._process_course_boundaries()
-        self._terminal_wales: dict[Loop, list[Wale]] = get_terminal_wales(self.execution_knit_graph)  # Todo update knitgraph to handle this
         self.wale_entrances: list[Wale_Boundary_Instruction] = self._get_wale_entrances()
         self.wale_exits: list[Wale_Boundary_Instruction] = self._get_wale_exits()
         self._instructions_on_wale_boundary: dict[Needle_Instruction, Wale_Boundary_Instruction] = {wb.instruction: wb for wb in self.wale_entrances}
@@ -186,18 +171,11 @@ class Swatch:
         self.knitout_program = self._knitout_execution.executed_instructions  # set the knitout program to be the program that is produced by successful execution.
 
     def _get_wale_entrances(self) -> list[Wale_Boundary_Instruction]:
-        if len(self._terminal_wales) == 0:  # the program does not result in any courses to form wales.
+        if len(self.execution_knit_graph.stitch_graph.nodes) == 0:  # the program does not result in a knitgraph to merge
             return []
         entrance_loops: set[Loop] = set()
-        wales_to_find_entrances = set()
-        for wales in self._terminal_wales.values():
-            wales_to_find_entrances.update(wales)
-        while len(wales_to_find_entrances) > 0:
-            wale = wales_to_find_entrances.pop()
-            if wale.first_loop.has_parent_loops():
-                wales_to_find_entrances.update(self.execution_knit_graph.get_wales_ending_with_loop(wale.first_loop))
-            else:
-                entrance_loops.add(wale.first_loop)
+        for wales in self.execution_knit_graph.get_terminal_wales().values():
+            entrance_loops.update(w.first_loop for w in wales)
         entrance_needles: set[Needle] = set(l.source_needle for l in entrance_loops if isinstance(l, Machine_Knit_Loop))
         locked_needles: set[Needle] = set()
         entrances_to_needles: dict[Needle, Wale_Boundary_Instruction] = {}
@@ -224,9 +202,9 @@ class Swatch:
         return [*entrances_to_needles.values()]
 
     def _get_wale_exits(self) -> list[Wale_Boundary_Instruction]:
-        if len(self._terminal_wales) == 0:  # the program does not result in any courses to form wales.
+        if len(self.execution_knit_graph.stitch_graph.nodes) == 0:  # the program does not result in a knitgraph to merge
             return []
-        exit_needles: set[Needle] = set(l.last_needle for l in self._terminal_wales if isinstance(l, Machine_Knit_Loop))
+        exit_needles: set[Needle] = set(l.last_needle for l in self.execution_knit_graph.terminal_loops() if isinstance(l, Machine_Knit_Loop))
         exits: list[Wale_Boundary_Instruction] = []
         for instruction in reversed(self.knitout_program):
             if isinstance(instruction, Needle_Instruction) and not isinstance(instruction, Miss_Instruction):

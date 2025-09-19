@@ -203,8 +203,6 @@ Documentation Contents
 
    installation
 
-.. TODO: Add Additional Pages for Usage and Examples as appropriate
-
 .. toctree::
    :maxdepth: 2
    :caption: API Reference

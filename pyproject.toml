@@ -73,7 +73,7 @@ exclude = [
 # These are packages your project needs to run in production
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"
-knit-graphs = ">=0.0.9"
+knit-graphs = ">=0.0.10"
 knitout-interpreter = ">=0.0.22"
 virtual-knitting-machine = ">=0.0.20"
 intervaltree = "^3.1.0"
